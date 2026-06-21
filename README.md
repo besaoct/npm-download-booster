@@ -9,7 +9,7 @@ This repository **automatically boosts** npm download counts for all packages pu
 1. **Fork** this repository
 2. Go to **Actions** → **npm-install-user-pkgs** → **Run workflow**
 3. Configure the inputs:
-   - **Repeats** — Number of installs per package (default: 100)
+   - **Repeats** — Number of installs per package (default: 5)
    - **Username** — Your npm username (default: GitHub username)
    - **Frequency (hours)** — How often it runs (default: 6)
 
