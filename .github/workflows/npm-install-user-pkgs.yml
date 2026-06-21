@@ -9,22 +9,22 @@ on:
   pull_request:
     branches: [ main, master ]
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 */6 * * *'   # Change this to adjust frequency
   workflow_dispatch:
     inputs:
       repeats:
-        description: 'Number of times to install/uninstall each package'
+        description: 'Number of times to install each package'
         required: false
         default: '100'
         type: string
       username:
-        description: 'npm username (optional)'
+        description: 'npm username (leave empty to auto-use your GitHub username)'
         required: false
         default: ''
         type: string
 
 jobs:
-  install-all:
+  npm-install-user-pkgs:     # ← Changed to match workflow name
     runs-on: ubuntu-latest
 
     steps:
@@ -39,19 +39,27 @@ jobs:
       - name: Fetch packages, boost downloads & get stats
         id: stats
         run: |
-          USERNAME="${{ inputs.username }}"
-          if [ -z "$USERNAME" ]; then
-            USERNAME="besaoct"
+          # Auto-detect username: Input → GitHub repo owner (perfect for forks)
+          if [ -n "${{ inputs.username }}" ]; then
+            USERNAME="${{ inputs.username }}"
+          else
+            USERNAME="${{ github.repository_owner }}"
           fi
+
+          echo "Using npm username: $USERNAME"
+          echo "USERNAME=$USERNAME" >> $GITHUB_ENV
 
           echo "Fetching packages for: $USERNAME"
           curl -s "https://registry.npmjs.org/-/v1/search?text=maintainer:$USERNAME&size=250" \
             | jq -r '.objects[].package.name' > pkg-list.txt
 
+          PACKAGE_COUNT=$(wc -l < pkg-list.txt)
+          echo "Found $PACKAGE_COUNT packages"
+
           REPEATS=${{ inputs.repeats || 100 }}
           echo "REPEATS=$REPEATS" >> $GITHUB_ENV
 
-          # Boost Downloads
+          # === Boost Downloads ===
           mkdir -p /tmp/pkg-install
           cd /tmp/pkg-install
           npm init -y
@@ -83,14 +91,36 @@ jobs:
           done < "$GITHUB_WORKSPACE/pkg-list.txt"
 
           echo "TOTAL_INSTALLS=$TOTAL_INSTALLS" >> $GITHUB_ENV
-          echo "TOTAL_INSTALLS=$TOTAL_INSTALLS" >> $GITHUB_OUTPUT
           echo "Total installs this run: $TOTAL_INSTALLS"
+
+          # === Generate Dynamic Table ===
+          echo "| Package | Weekly Downloads | Badge |" > table.md
+          echo "|---------|------------------|-------|" >> table.md
+
+          while read -r pkg; do
+            if [ -z "$pkg" ]; then continue; fi
+            DOWNLOADS=$(curl -s "https://api.npmjs.org/downloads/point/last-week/$pkg" | jq -r '.downloads // 0')
+            echo "| [$pkg](https://www.npmjs.com/package/$pkg) | $DOWNLOADS | [![Downloads](https://img.shields.io/npm/dw/$pkg)](https://www.npmjs.com/package/$pkg) |" >> table.md
+          done < "$GITHUB_WORKSPACE/pkg-list.txt"
 
       - name: Update README.md
         run: |
           DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
-          TABLE=$(cat table.md 2>/dev/null || echo "| Package | Weekly Downloads | Badge |\n|---------|------------------|-------|\n| No packages found | 0 | - |")
+          TABLE=$(cat table.md)
 
-          sed -i '/<!-- DOWNLOAD_STATS_START -->/,/<!-- DOWNLOAD_STATS_END -->/c\<!-- DOWNLOAD_STATS_START -->\n**Last Updated:** '"$DATE"'\n\n### Overview\n\n- Runs every **6 hours**\n- Installs each package **100 times** per run\n- Each `npm install` counts as a real download on npm\n- Expected boost: **~2,800 downloads per package per week**\n\n### Packages & Weekly Downloads\n\n'"$TABLE"'\n\n**Total Boosted This Run:** '"${{ env.TOTAL_INSTALLS || '0' }}"' \n<!-- DOWNLOAD_STATS_END -->' README.md
+          sed -i '/<!-- DOWNLOAD_STATS_START -->/,/<!-- DOWNLOAD_STATS_END -->/c\<!-- DOWNLOAD_STATS_START -->\n**Last Updated:** '"$DATE"'\n\n### Overview\n\n- Runs every **6 hours**\n- Installs each package **100 times** per run\n- Each `npm install` counts as a real download on npm\n- Expected boost: **~2,800 downloads per package per week**\n\n### Packages & Weekly Downloads\n\n'"$TABLE"'\n\n**Total Boosted This Run:** '"${{ env.TOTAL_INSTALLS || 0 }}"' \n<!-- DOWNLOAD_STATS_END -->' README.md
 
-          echo "README updated with ${{ env.TOTAL_INSTALLS || 0 }} installs"
+          echo "README updated successfully"
+
+      - name: Commit & Push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add README.md
+          if git diff --staged --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: update download stats & table (${{ env.TOTAL_INSTALLS || 0 }} installs) [skip ci]"
+            git push
+          fi
