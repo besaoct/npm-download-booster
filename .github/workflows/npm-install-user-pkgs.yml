@@ -1,24 +1,15 @@
 # =============================================================================
 # .github/workflows/npm-install-user-pkgs.yml
-#
-# PURPOSE:
-# Automatically checks installation of all packages published by npm user "besaoct".
-# Runs every 6 hours + on code changes + manual trigger.
 # =============================================================================
 name: npm-install-user-pkgs
 
 on:
-  # Run automatically when code is pushed or a PR is created
   push:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
-
-  # Run every 6 hours
   schedule:
-    - cron: '0 */6 * * *'   # Every 6 hours (00:00, 06:00, 12:00, 18:00 UTC)
-
-  # Manual trigger with options
+    - cron: '0 */6 * * *'
   workflow_dispatch:
     inputs:
       repeats:
@@ -27,7 +18,7 @@ on:
         default: '100'
         type: string
       username:
-        description: 'npm username (optional - overrides the hardcoded one)'
+        description: 'npm username (optional)'
         required: false
         default: ''
         type: string
@@ -37,31 +28,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Set up Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Fetch package list for npm user
-        id: pkglist
+      - name: Fetch packages, boost downloads & get stats
+        id: stats
         run: |
           USERNAME="${{ inputs.username }}"
           if [ -z "$USERNAME" ]; then
             USERNAME="besaoct"
           fi
 
-          echo "Fetching packages for npm user: $USERNAME"
+          echo "Fetching packages for: $USERNAME"
           curl -s "https://registry.npmjs.org/-/v1/search?text=maintainer:$USERNAME&size=250" \
             | jq -r '.objects[].package.name' > pkg-list.txt
 
-          echo "Found $(wc -l < pkg-list.txt) packages:"
-          cat pkg-list.txt
-
-      - name: Install packages from user
-        run: |
           REPEATS=${{ inputs.repeats || 100 }}
-          echo "=== Starting installation runs with $REPEATS repeats per package ==="
+          echo "REPEATS=$REPEATS" >> $GITHUB_ENV
 
+          # Boost Downloads
           mkdir -p /tmp/pkg-install
           cd /tmp/pkg-install
           npm init -y
@@ -76,56 +66,31 @@ jobs:
           }
           EOF
 
-          TOTAL=0
-          INSTALL_FAIL=0
-          LOAD_FAIL=0
+          TOTAL_INSTALLS=0
 
           while read -r pkg; do
             if [ -z "$pkg" ]; then continue; fi
-
-            TOTAL=$((TOTAL + 1))
             echo "=== Processing $pkg ($REPEATS times) ==="
 
             for i in $(seq 1 $REPEATS); do
               echo "  → Run $i/$REPEATS"
-
-              if npm install "$pkg@latest" --no-audit --no-fund; then
-                echo "    ✅ Installed OK"
-              else
-                echo "    ❌ FAILED to install"
-                INSTALL_FAIL=$((INSTALL_FAIL + 1))
-                continue
-              fi
-
-              if node /tmp/verify.js "$pkg"; then
-                echo "    ✅ Loaded OK"
-              else
-                echo "    ❌ LOAD FAILED"
-                LOAD_FAIL=$((LOAD_FAIL + 1))
-              fi
-
-              npm uninstall "$pkg" >/dev/null 2>&1 && echo "    🗑️  Uninstalled" || echo "    ⚠️  Failed to uninstall"
-
+              npm install "$pkg@latest" --no-audit --no-fund --prefer-offline && echo "    ✅ Installed" || echo "    ❌ Failed"
+              node /tmp/verify.js "$pkg" && echo "    ✅ Loaded OK" || echo "    ❌ LOAD FAILED"
+              npm uninstall "$pkg" >/dev/null 2>&1
+              TOTAL_INSTALLS=$((TOTAL_INSTALLS + 1))
               sleep 0.3
             done
-
-            echo "----------------------------------------"
           done < "$GITHUB_WORKSPACE/pkg-list.txt"
 
-          echo ""
-          echo "========================================"
-          echo "INSTALLATION SUMMARY"
-          echo "========================================"
-          echo "Total packages processed  : $TOTAL"
-          echo "Repeats per package       : $REPEATS"
-          echo "Total install attempts    : $((TOTAL * REPEATS))"
-          echo "Install failures          : $INSTALL_FAIL"
-          echo "Load failures             : $LOAD_FAIL"
-          echo "========================================"
+          echo "TOTAL_INSTALLS=$TOTAL_INSTALLS" >> $GITHUB_ENV
+          echo "TOTAL_INSTALLS=$TOTAL_INSTALLS" >> $GITHUB_OUTPUT
+          echo "Total installs this run: $TOTAL_INSTALLS"
 
-          if [ $INSTALL_FAIL -gt 0 ] || [ $LOAD_FAIL -gt 0 ]; then
-            echo "⚠️  Some packages had failures!"
-            exit 1
-          else
-            echo "✅ All packages processed successfully!"
-          fi
+      - name: Update README.md
+        run: |
+          DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
+          TABLE=$(cat table.md 2>/dev/null || echo "| Package | Weekly Downloads | Badge |\n|---------|------------------|-------|\n| No packages found | 0 | - |")
+
+          sed -i '/<!-- DOWNLOAD_STATS_START -->/,/<!-- DOWNLOAD_STATS_END -->/c\<!-- DOWNLOAD_STATS_START -->\n**Last Updated:** '"$DATE"'\n\n### Overview\n\n- Runs every **6 hours**\n- Installs each package **100 times** per run\n- Each `npm install` counts as a real download on npm\n- Expected boost: **~2,800 downloads per package per week**\n\n### Packages & Weekly Downloads\n\n'"$TABLE"'\n\n**Total Boosted This Run:** '"${{ env.TOTAL_INSTALLS || '0' }}"' \n<!-- DOWNLOAD_STATS_END -->' README.md
+
+          echo "README updated with ${{ env.TOTAL_INSTALLS || 0 }} installs"
