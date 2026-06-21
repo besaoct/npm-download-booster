@@ -18,7 +18,7 @@ This repository **automatically boosts** npm download counts for all packages pu
 | Option       | Description                            | Default | How to Change                  |
 |--------------|----------------------------------------|---------|--------------------------------|
 | Frequency    | Run every X hours                      | 6       | Workflow dispatch or cron      |
-| Repeats      | Installs per package per run           | 100     | Manual trigger                 |
+| Repeats      | Installs per package per run           | 5       | Manual trigger                 |
 | Username     | npm username to boost                  | GitHub owner | Manual trigger             |
 
 ## ⚠️ Important Notes
