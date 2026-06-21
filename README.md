@@ -4,11 +4,6 @@ This repository **automatically boosts** npm download counts for all packages pu
 
 > **Fork-friendly**: When you fork this repo, it will automatically use **your GitHub username** as the npm username (you can override it anytime via workflow dispatch).
 
-## 📊 Download Stats (Auto Updated)
-
-
----
-
 ## How to Use
 
 1. **Fork** this repository
@@ -33,10 +28,8 @@ This repository **automatically boosts** npm download counts for all packages pu
 - npm may apply rate limiting if you use very high repeats or very low frequency.
 - Use responsibly and respect npm's [Terms of Service](https://www.npmjs.com/policies/terms).
 
----
 
-**Made with ❤️ for open source package authors**
-
+## 📊 Download Stats (Auto Updated)
 
 <!-- DOWNLOAD_STATS_START -->
 **Last Updated:** 2026-06-21 22:27 UTC
