@@ -2,7 +2,7 @@
 
 This repository **automatically boosts** npm download counts for all packages published by a given npm user.
 
-> **Fork-friendly**: When you fork this repo, it will automatically use **your GitHub username** as the npm username (you can override it anytime).
+> **Fork-friendly**: When you fork this repo, it will automatically use **your GitHub username** as the npm username (you can override it anytime via workflow dispatch).
 
 ## 📊 Download Stats (Auto Updated)
 
@@ -34,18 +34,25 @@ This repository **automatically boosts** npm download counts for all packages pu
 
 1. **Fork** this repository
 2. Go to **Actions** → **npm-install-user-pkgs** → **Run workflow**
-3. Configure:
-   - **Repeats**: Number of installs per package (default: 100)
-   - **Username**: Your npm username (default: GitHub username)
-   - **Frequency (hours)**: How often it runs (default: 6)
+3. Configure the inputs:
+   - **Repeats** — Number of installs per package (default: 100)
+   - **Username** — Your npm username (default: GitHub username)
+   - **Frequency (hours)** — How often it runs (default: 6)
 
 ## Configuration Options
 
-| Option            | Description                            | Default | How to Change                  |
-|-------------------|----------------------------------------|---------|--------------------------------|
-| Frequency         | Run every X hours                      | 6       | Workflow dispatch or cron      |
-| Repeats           | Installs per package per run           | 100     | Manual trigger                 |
-| Username          | npm username to boost                  | GitHub owner | Manual trigger             |
+| Option       | Description                            | Default | How to Change                  |
+|--------------|----------------------------------------|---------|--------------------------------|
+| Frequency    | Run every X hours                      | 6       | Workflow dispatch or cron      |
+| Repeats      | Installs per package per run           | 100     | Manual trigger                 |
+| Username     | npm username to boost                  | GitHub owner | Manual trigger             |
+
+## ⚠️ Important Notes
+
+- This tool uses real `npm install` commands — each install counts as a legitimate download on npm.
+- GitHub Actions has **free minute limits** (especially on public repositories).
+- npm may apply rate limiting if you use very high repeats or very low frequency.
+- Use responsibly and respect npm's [Terms of Service](https://www.npmjs.com/policies/terms).
 
 ---
 
