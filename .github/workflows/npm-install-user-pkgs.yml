@@ -2,21 +2,29 @@
 # .github/workflows/npm-install-user-pkgs.yml
 #
 # PURPOSE:
-# Daily smoke test that installs, verifies, and uninstalls all packages
-# published by npm user "besaoct" — repeated multiple times.
+# Automatically checks installation of all packages published by npm user "besaoct".
+# Runs every 6 hours + on code changes + manual trigger.
 # =============================================================================
 name: npm-install-user-pkgs
 
 on:
-  schedule:
-    - cron: '0 0 * * *'   # Runs every day at midnight UTC
+  # Run automatically when code is pushed or a PR is created
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
 
+  # Run every 6 hours
+  schedule:
+    - cron: '0 */6 * * *'   # Every 6 hours (00:00, 06:00, 12:00, 18:00 UTC)
+
+  # Manual trigger with options
   workflow_dispatch:
     inputs:
       repeats:
         description: 'Number of times to install/uninstall each package'
         required: false
-        default: '10'
+        default: '100'
         type: string
       username:
         description: 'npm username (optional - overrides the hardcoded one)'
@@ -25,7 +33,7 @@ on:
         type: string
 
 jobs:
-  test-install:
+  install-all:
     runs-on: ubuntu-latest
 
     steps:
@@ -39,7 +47,7 @@ jobs:
         run: |
           USERNAME="${{ inputs.username }}"
           if [ -z "$USERNAME" ]; then
-            USERNAME="besaoct"   # ← Your npm username
+            USERNAME="besaoct"
           fi
 
           echo "Fetching packages for npm user: $USERNAME"
@@ -49,13 +57,13 @@ jobs:
           echo "Found $(wc -l < pkg-list.txt) packages:"
           cat pkg-list.txt
 
-      - name: Install and uninstall each package (multiple times)
+      - name: Install packages from user
         run: |
-          REPEATS=${{ inputs.repeats || 10 }}
-          echo "=== Starting tests with $REPEATS repeats per package ==="
+          REPEATS=${{ inputs.repeats || 100 }}
+          echo "=== Starting installation runs with $REPEATS repeats per package ==="
 
-          mkdir -p /tmp/pkg-test
-          cd /tmp/pkg-test
+          mkdir -p /tmp/pkg-install
+          cd /tmp/pkg-install
           npm init -y
 
           cat > /tmp/verify.js << 'EOF'
@@ -76,7 +84,7 @@ jobs:
             if [ -z "$pkg" ]; then continue; fi
 
             TOTAL=$((TOTAL + 1))
-            echo "=== Testing $pkg ($REPEATS times) ==="
+            echo "=== Processing $pkg ($REPEATS times) ==="
 
             for i in $(seq 1 $REPEATS); do
               echo "  → Run $i/$REPEATS"
@@ -98,7 +106,7 @@ jobs:
 
               npm uninstall "$pkg" >/dev/null 2>&1 && echo "    🗑️  Uninstalled" || echo "    ⚠️  Failed to uninstall"
 
-              sleep 0.5
+              sleep 0.3
             done
 
             echo "----------------------------------------"
@@ -106,9 +114,9 @@ jobs:
 
           echo ""
           echo "========================================"
-          echo "TEST SUMMARY"
+          echo "INSTALLATION SUMMARY"
           echo "========================================"
-          echo "Total packages tested     : $TOTAL"
+          echo "Total packages processed  : $TOTAL"
           echo "Repeats per package       : $REPEATS"
           echo "Total install attempts    : $((TOTAL * REPEATS))"
           echo "Install failures          : $INSTALL_FAIL"
@@ -119,5 +127,5 @@ jobs:
             echo "⚠️  Some packages had failures!"
             exit 1
           else
-            echo "✅ All tests completed successfully!"
+            echo "✅ All packages processed successfully!"
           fi
