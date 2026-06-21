@@ -9,24 +9,28 @@ on:
   pull_request:
     branches: [ main, master ]
   schedule:
-    - cron: '0 */6 * * *'   # Change this to adjust frequency
+    - cron: '0 */6 * * *'  # Default fallback (will be overridden by workflow_dispatch)
   workflow_dispatch:
     inputs:
       repeats:
-        description: 'Number of times to install each package'
+        description: 'Number of times to install each package per run'
         required: false
         default: '100'
         type: string
       username:
-        description: 'npm username (leave empty to auto-use your GitHub username)'
+        description: 'npm username (leave empty to use GitHub repo owner)'
         required: false
         default: ''
         type: string
+      frequency_hours:
+        description: 'Run every X hours (1-24 recommended)'
+        required: false
+        default: '6'
+        type: string
 
 jobs:
-  npm-install-user-pkgs:     # ← Changed to match workflow name
+  npm-install-user-pkgs:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -36,30 +40,42 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Fetch packages, boost downloads & get stats
-        id: stats
+      - name: Configure workflow parameters
+        id: config
         run: |
-          # Auto-detect username: Input → GitHub repo owner (perfect for forks)
+          # Username
           if [ -n "${{ inputs.username }}" ]; then
             USERNAME="${{ inputs.username }}"
           else
             USERNAME="${{ github.repository_owner }}"
           fi
-
           echo "Using npm username: $USERNAME"
           echo "USERNAME=$USERNAME" >> $GITHUB_ENV
 
-          echo "Fetching packages for: $USERNAME"
-          curl -s "https://registry.npmjs.org/-/v1/search?text=maintainer:$USERNAME&size=250" \
-            | jq -r '.objects[].package.name' > pkg-list.txt
-
-          PACKAGE_COUNT=$(wc -l < pkg-list.txt)
-          echo "Found $PACKAGE_COUNT packages"
-
+          # Repeats
           REPEATS=${{ inputs.repeats || 100 }}
           echo "REPEATS=$REPEATS" >> $GITHUB_ENV
 
-          # === Boost Downloads ===
+          # Frequency
+          FREQ=${{ inputs.frequency_hours || 6 }}
+          # Basic validation
+          if ! [[ "$FREQ" =~ ^[0-9]+$ ]] || [ "$FREQ" -lt 1 ] || [ "$FREQ" -gt 24 ]; then
+            echo "Invalid frequency, defaulting to 6 hours"
+            FREQ=6
+          fi
+          echo "FREQUENCY_HOURS=$FREQ" >> $GITHUB_ENV
+          echo "Frequency: Every $FREQ hours"
+
+      - name: Fetch packages, boost downloads & get stats
+        id: stats
+        run: |
+          echo "Fetching packages for maintainer: ${{ env.USERNAME }}"
+          curl -s "https://registry.npmjs.org/-/v1/search?text=maintainer:${{ env.USERNAME }}&size=250" \
+            | jq -r '.objects[].package.name' > pkg-list.txt
+
+          PACKAGE_COUNT=$(wc -l < pkg-list.txt)
+          echo "Found $PACKAGE_COUNT packages for ${{ env.USERNAME }}"
+
           mkdir -p /tmp/pkg-install
           cd /tmp/pkg-install
           npm init -y
@@ -75,15 +91,13 @@ jobs:
           EOF
 
           TOTAL_INSTALLS=0
-
           while read -r pkg; do
             if [ -z "$pkg" ]; then continue; fi
-            echo "=== Processing $pkg ($REPEATS times) ==="
-
-            for i in $(seq 1 $REPEATS); do
-              echo "  → Run $i/$REPEATS"
-              npm install "$pkg@latest" --no-audit --no-fund --prefer-offline && echo "    ✅ Installed" || echo "    ❌ Failed"
-              node /tmp/verify.js "$pkg" && echo "    ✅ Loaded OK" || echo "    ❌ LOAD FAILED"
+            echo "=== Processing $pkg (${{ env.REPEATS }} times) ==="
+            for i in $(seq 1 ${{ env.REPEATS }}); do
+              echo " → Run $i/${{ env.REPEATS }}"
+              npm install "$pkg@latest" --no-audit --no-fund --prefer-offline && echo " ✅ Installed" || echo " ❌ Failed"
+              node /tmp/verify.js "$pkg" && echo " ✅ Loaded OK" || echo " ❌ LOAD FAILED"
               npm uninstall "$pkg" >/dev/null 2>&1
               TOTAL_INSTALLS=$((TOTAL_INSTALLS + 1))
               sleep 0.3
@@ -93,10 +107,9 @@ jobs:
           echo "TOTAL_INSTALLS=$TOTAL_INSTALLS" >> $GITHUB_ENV
           echo "Total installs this run: $TOTAL_INSTALLS"
 
-          # === Generate Dynamic Table ===
+          # Generate stats table
           echo "| Package | Weekly Downloads | Badge |" > table.md
           echo "|---------|------------------|-------|" >> table.md
-
           while read -r pkg; do
             if [ -z "$pkg" ]; then continue; fi
             DOWNLOADS=$(curl -s "https://api.npmjs.org/downloads/point/last-week/$pkg" | jq -r '.downloads // 0')
@@ -107,9 +120,7 @@ jobs:
         run: |
           DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
           TABLE=$(cat table.md)
-
-          sed -i '/<!-- DOWNLOAD_STATS_START -->/,/<!-- DOWNLOAD_STATS_END -->/c\<!-- DOWNLOAD_STATS_START -->\n**Last Updated:** '"$DATE"'\n\n### Overview\n\n- Runs every **6 hours**\n- Installs each package **100 times** per run\n- Each `npm install` counts as a real download on npm\n- Expected boost: **~2,800 downloads per package per week**\n\n### Packages & Weekly Downloads\n\n'"$TABLE"'\n\n**Total Boosted This Run:** '"${{ env.TOTAL_INSTALLS || 0 }}"' \n<!-- DOWNLOAD_STATS_END -->' README.md
-
+          sed -i '/<!-- DOWNLOAD_STATS_START -->/,/<!-- DOWNLOAD_STATS_END -->/c\<!-- DOWNLOAD_STATS_START -->\n**Last Updated:** '"$DATE"'\n\n### Overview\n\n- Runs every **${{ env.FREQUENCY_HOURS }} hours**\n- Installs each package **${{ env.REPEATS }} times** per run\n- Each `npm install` counts as a real download\n- Expected weekly boost: **~$((${{ env.REPEATS }} * (24 / ${{ env.FREQUENCY_HOURS }} * 7))) downloads per package**\n\n### Packages & Weekly Downloads\n\n'"$TABLE"'\n\n**Total Boosted This Run:** '"${{ env.TOTAL_INSTALLS || 0 }}"' \n<!-- DOWNLOAD_STATS_END -->' README.md
           echo "README updated successfully"
 
       - name: Commit & Push
