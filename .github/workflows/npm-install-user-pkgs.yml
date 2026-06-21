@@ -52,7 +52,7 @@ jobs:
           USERNAME="${USERNAME:-${{ github.repository_owner }}}"
          
           REPEATS="${{ inputs.repeats }}"
-          REPEATS="${REPEATS:-100}"
+          REPEATS="${REPEATS:-5}"
          
           FREQUENCY="${{ inputs.frequency_hours }}"
           FREQUENCY="${FREQUENCY:-6}"
