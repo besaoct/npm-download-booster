@@ -30,21 +30,21 @@ This repository **automatically boosts** npm download counts for all packages pu
 
 ---
 
-## How to Customize (After Forking)
+## How to Customize
 
 1. Go to **Actions** → **npm-install-user-pkgs** → **Run workflow**
-2. You can set:
-   - **Repeats** → Number of installs per package per run
-   - **npm username** → Your npm username
-   - **Frequency (hours)** → How often it runs (1–24)
+2. Adjust:
+   - **Repeats** — installs per package
+   - **Username** — your npm username
+   - **Frequency (hours)** — how often it runs
 
 ## Configuration Options
 
-| Option              | Description                            | Default | How to Change                     |
-|---------------------|----------------------------------------|---------|-----------------------------------|
-| Frequency           | Run every X hours                      | 6       | `frequency_hours` input or cron   |
-| Repeats             | Installs per package                   | 100     | Manual trigger                    |
-| Username            | npm username to boost                  | GitHub owner | `username` input               |
+| Option       | Description                      | Default | How to Change              |
+|--------------|----------------------------------|---------|----------------------------|
+| Frequency    | Run every X hours                | 6       | Input or cron              |
+| Repeats      | Installs per package per run     | 100     | Manual trigger             |
+| Username     | npm username                     | GitHub owner | Manual trigger         |
 
 ---
 
