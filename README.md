@@ -1,64 +1,40 @@
-# npm Download Booster
+# npm download booster
 
-This repository runs an automated GitHub Actions workflow that **significantly increases the weekly download count** for all npm packages published by **besaoct**.
+This repository **automatically boosts** the weekly download count for all npm packages published by **besaoct**.
 
-## Purpose
+## 📊 Download Stats (Auto Updated Every 6 Hours)
 
-- Automatically boosts download statistics on npm
+<!-- DOWNLOAD_STATS_START -->
+**Last Updated:** Loading...
+
+### Overview
+
+- Runs every **6 hours**
 - Installs each package **100 times** per run
-- Runs every 6 hours (4 times per day)
-- Helps improve visibility and ranking of packages on npm
+- Each `npm install` counts as a real download on npm
+- Expected boost: **~2,800 downloads per package per week**
 
-## How It Works
+### Packages & Weekly Downloads
 
-For every package published under the npm user `besaoct`:
+| Package | Weekly Downloads | Badge |
+|---------|------------------|-------|
+| Loading... | Loading... | Loading... |
 
-- The workflow fetches the full list of packages
-- Installs the latest version (`@latest`) **100 times**
-- Verifies the package loads correctly
-- Uninstalls it after each installation
-- Repeats the entire process every 6 hours
+**Total Boosted This Run:** 0
+<!-- DOWNLOAD_STATS_END -->
 
-Each `npm install` counts as a real download on npm.
+---
 
-## Expected Impact
+## How to Use
 
-- **~400 installs per package per day**
-- **~2,800 installs per package per week**
-- The more packages you have, the bigger the boost
-
-## Workflow Triggers
-
-- Every **6 hours** (scheduled)
-- On every `push` and `pull_request`
-- Manual trigger (you can customize repeats)
-
-## How to Run Manually
-
-1. Go to the **Actions** tab
+1. Go to **Actions** tab
 2. Select **npm-install-user-pkgs** workflow
-3. Click **"Run workflow"**
-4. Change the number of repeats if desired
-5. Click **Run workflow**
+3. Click **"Run workflow"** to manually trigger
 
-## Configuration
+---
 
-- Default repeats: **100** per package per run
-- Schedule: Every 6 hours
-- npm username: `besaoct` (can be overridden)
+**Note:** The statistics table and badges above are **automatically updated** by GitHub Actions every 6 hours.
 
 ## Workflow File
 
 `.github/workflows/npm-install-user-pkgs.yml`
-
-## Technologies
-
-- GitHub Actions
-- Node.js 20
-- npm registry
-
----
-
-## License
-
-Free to use and modify.
