@@ -1,5 +1,6 @@
 # =============================================================================
 # .github/workflows/npm-install-user-pkgs.yml
+# PRODUCTION-READY VERSION - Cleaned & Fixed
 # =============================================================================
 name: npm-install-user-pkgs
 
@@ -40,125 +41,233 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Load Previous Stats & Initial README Update
-        id: init
+      - name: Initialize workflow variables
+        id: init_vars
         run: |
-          # Load or initialize stats
+          USERNAME="${{ inputs.username }}"
+          USERNAME="${USERNAME:-${{ github.repository_owner }}}"
+         
+          REPEATS="${{ inputs.repeats }}"
+          REPEATS="${REPEATS:-100}"
+         
+          FREQUENCY="${{ inputs.frequency_hours }}"
+          FREQUENCY="${FREQUENCY:-6}"
+         
+          # Validation
+          if ! [[ "$REPEATS" =~ ^[0-9]+$ ]] || [ "$REPEATS" -lt 1 ]; then
+            echo "ERROR: Repeats must be a positive number"
+            exit 1
+          fi
+         
+          if ! [[ "$FREQUENCY" =~ ^[0-9]+$ ]] || [ "$FREQUENCY" -lt 1 ] || [ "$FREQUENCY" -gt 24 ]; then
+            echo "ERROR: Frequency must be between 1-24"
+            exit 1
+          fi
+         
+          echo "USERNAME=$USERNAME" >> $GITHUB_ENV
+          echo "REPEATS=$REPEATS" >> $GITHUB_ENV
+          echo "FREQUENCY=$FREQUENCY" >> $GITHUB_ENV
+         
+          echo "✓ Initialized → User: $USERNAME | Repeats: $REPEATS | Frequency: $FREQUENCY hours"
+
+      - name: Load Previous Stats
+        id: load_stats
+        run: |
           if [ -f "stats.json" ]; then
-            TOTAL_RUNS=$(jq -r '.totalRuns // 0' stats.json)
-            TOTAL_BOOSTED=$(jq -r '.totalBoosted // 0' stats.json)
-            AVG_PER_RUN=$(jq -r '.avgPerRun // 0' stats.json)
-            TOTAL_PACKAGES=$(jq -r '.totalPackages // 0' stats.json)
+            TOTAL_RUNS=$(jq -r '.totalRuns // 0' stats.json 2>/dev/null || echo "0")
+            TOTAL_BOOSTED=$(jq -r '.totalBoosted // 0' stats.json 2>/dev/null || echo "0")
+            AVG_PER_RUN=$(jq -r '.avgPerRun // 0' stats.json 2>/dev/null || echo "0")
+            TOTAL_PACKAGES=$(jq -r '.totalPackages // 0' stats.json 2>/dev/null || echo "0")
           else
             TOTAL_RUNS=0
             TOTAL_BOOSTED=0
             AVG_PER_RUN=0
             TOTAL_PACKAGES=0
           fi
-
+         
           echo "TOTAL_RUNS=$TOTAL_RUNS" >> $GITHUB_ENV
           echo "TOTAL_BOOSTED=$TOTAL_BOOSTED" >> $GITHUB_ENV
           echo "AVG_PER_RUN=$AVG_PER_RUN" >> $GITHUB_ENV
-          echo "PACKAGE_COUNT=$TOTAL_PACKAGES" >> $GITHUB_ENV
+          echo "TOTAL_PACKAGES=$TOTAL_PACKAGES" >> $GITHUB_ENV
 
-          # Create initial table safely
-          echo "| Package | Weekly Downloads | Badge |" > table.md
-          echo "|---------|------------------|-------|" >> table.md
-          echo "| **Running...** | ... | ... |" >> table.md
-
-          # Initial README update
-          DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
-          sed -i '/<!-- DOWNLOAD_STATS_START -->/,/<!-- DOWNLOAD_STATS_END -->/c\<!-- DOWNLOAD_STATS_START -->\n**Last Updated:** '"$DATE"' *(In Progress)*\n\n### Overview\n- Runs every **'"${{ inputs.frequency_hours || 6 }}"' hours**\n- Installs each package **'"${{ inputs.repeats || 100 }}"' times** per run\n\n### Cumulative Stats\n- **Total Runs:** '"$TOTAL_RUNS"'\n- **Total Boosted:** '"$TOTAL_BOOSTED"' downloads\n- **Boosted This Run:** *Running...*\n- **Average per Run:** '"$AVG_PER_RUN"' downloads\n- **Total Packages:** '"$TOTAL_PACKAGES"'\n- **Estimated Weekly Boost:** Calculating...\n- **Last Run:** '"$DATE"'\n\n### Packages & Weekly Downloads\n\n'"$(cat table.md)"'\n<!-- DOWNLOAD_STATS_END -->' README.md
-
-          echo "Initial README updated (in progress)"
-
-      - name: Fetch packages & Boost downloads
-        id: boost
+      - name: Create Initial Status & Update README
         run: |
-          # Username logic
-          if [ -n "${{ inputs.username }}" ]; then
-            USERNAME="${{ inputs.username }}"
+          DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
+          
+          # Initial table
+          printf '%s\n' \
+            '| Package | Weekly Downloads | Badge |' \
+            '|---------|------------------|-------|' \
+            '| **Running...** | ... | ... |' > table.md
+
+          # Update README with in-progress status
+          awk '/<!-- DOWNLOAD_STATS_START -->/,/<!-- DOWNLOAD_STATS_END -->/{next} {print}' README.md > README.md.tmp
+          
+          {
+            cat README.md.tmp
+            echo ""
+            echo "<!-- DOWNLOAD_STATS_START -->"
+            echo "**Last Updated:** $DATE *(In Progress)*"
+            echo ""
+            echo "### Overview"
+            echo "- Runs every **$FREQUENCY hours** (configurable)"
+            echo "- Installs each package **$REPEATS times** per run (configurable)"
+            echo ""
+            echo "### Cumulative Stats"
+            echo "- **Total Runs:** $TOTAL_RUNS"
+            echo "- **Total Boosted:** $TOTAL_BOOSTED downloads"
+            echo "- **Boosted This Run:** *Running...*"
+            echo "- **Average per Run:** $AVG_PER_RUN downloads"
+            echo "- **Total Packages:** $TOTAL_PACKAGES"
+            echo "- **Estimated Weekly Boost:** Calculating..."
+            echo "- **Last Run:** $DATE"
+            echo ""
+            echo "### Packages & Weekly Downloads"
+            cat table.md
+            echo "<!-- DOWNLOAD_STATS_END -->"
+          } > README.md
+          
+          rm -f README.md.tmp
+          echo "✓ Initial README updated (In Progress)"
+
+      - name: Fetch packages from npm registry
+        id: fetch_packages
+        run: |
+          echo "Fetching packages for maintainer: $USERNAME"
+          
+          RESPONSE=$(curl -s --max-time 15 "https://registry.npmjs.org/-/v1/search?text=maintainer:$USERNAME&size=250")
+          
+          echo "$RESPONSE" | jq -r '.objects[].package.name' 2>/dev/null > pkg-list.txt || echo "" > pkg-list.txt
+          
+          PACKAGE_COUNT=$(grep -cv '^$' pkg-list.txt 2>/dev/null || echo "0")
+          echo "PACKAGE_COUNT=$PACKAGE_COUNT" >> $GITHUB_ENV
+          
+          if [ "$PACKAGE_COUNT" -eq 0 ]; then
+            echo "⚠ No packages found for $USERNAME"
+            echo "SKIP_BOOST=true" >> $GITHUB_ENV
           else
-            USERNAME="${{ github.repository_owner }}"
+            echo "✓ Found $PACKAGE_COUNT packages"
+            echo "SKIP_BOOST=false" >> $GITHUB_ENV
           fi
 
-          curl -s "https://registry.npmjs.org/-/v1/search?text=maintainer:$USERNAME&size=250" \
-            | jq -r '.objects[].package.name' > pkg-list.txt
-
-          PACKAGE_COUNT=$(wc -l < pkg-list.txt)
-          echo "PACKAGE_COUNT=$PACKAGE_COUNT" >> $GITHUB_ENV
-          echo "Found $PACKAGE_COUNT packages"
-
-          # === Boosting ===
+      - name: Boost npm downloads
+        id: boost
+        if: env.SKIP_BOOST == 'false'
+        run: |
           mkdir -p /tmp/pkg-install && cd /tmp/pkg-install
-          npm init -y
-          cat > /tmp/verify.js << 'EOF'
-          try { require(process.argv[1]); console.log('Loaded OK'); } catch(e) { console.error('LOAD FAILED'); process.exit(1); }
-          EOF
-
+          npm init -y >/dev/null 2>&1
+          
+          cat > /tmp/verify.js << 'VERIFY_EOF'
+          try { require(process.argv[1]); process.exit(0); } catch(e) { process.exit(1); }
+          VERIFY_EOF
+          
           TOTAL_INSTALLS=0
-          while read -r pkg; do
-            if [ -z "$pkg" ]; then continue; fi
-            for i in $(seq 1 ${{ inputs.repeats || 100 }}); do
-              npm install "$pkg@latest" --no-audit --no-fund --prefer-offline >/dev/null 2>&1
-              node /tmp/verify.js "$pkg" >/dev/null 2>&1
-              npm uninstall "$pkg" >/dev/null 2>&1
+          
+          while IFS= read -r pkg || [ -n "$pkg" ]; do
+            [ -z "$pkg" ] && continue
+            echo "→ Processing $pkg"
+            
+            for i in $(seq 1 $REPEATS); do
+              npm install "$pkg@latest" --no-audit --no-fund --prefer-offline --silent >/dev/null 2>&1 && \
+              node /tmp/verify.js "$pkg" >/dev/null 2>&1 && \
               TOTAL_INSTALLS=$((TOTAL_INSTALLS + 1))
-              sleep 0.3
+              
+              npm uninstall "$pkg" >/dev/null 2>&1 || true
+              
+              # Random delay 0.4 - 1.8 seconds
+              sleep 0.$((RANDOM % 15 + 4))
             done
           done < "$GITHUB_WORKSPACE/pkg-list.txt"
-
+          
           echo "BOOST_THIS_RUN=$TOTAL_INSTALLS" >> $GITHUB_ENV
+          echo "✓ Boost completed: $TOTAL_INSTALLS installs"
 
-          # Generate fresh table
-          echo "| Package | Weekly Downloads | Badge |" > "$GITHUB_WORKSPACE/table.md"
-          echo "|---------|------------------|-------|" >> "$GITHUB_WORKSPACE/table.md"
-          while read -r pkg; do
-            if [ -z "$pkg" ]; then continue; fi
-            DOWNLOADS=$(curl -s "https://api.npmjs.org/downloads/point/last-week/$pkg" | jq -r '.downloads // 0')
-            echo "| [$pkg](https://www.npmjs.com/package/$pkg) | $DOWNLOADS | [![Downloads](https://img.shields.io/npm/dw/$pkg)](https://www.npmjs.com/package/$pkg) |" >> "$GITHUB_WORKSPACE/table.md"
-          done < "$GITHUB_WORKSPACE/pkg-list.txt"
+      - name: Set boost count for skipped runs
+        if: env.SKIP_BOOST == 'true'
+        run: echo "BOOST_THIS_RUN=0" >> $GITHUB_ENV
 
-      - name: Update Cumulative Stats & Final README
-        id: final
+      - name: Generate download stats table
         run: |
-          TOTAL_RUNS=$(( ${{ env.TOTAL_RUNS }} + 1 ))
-          TOTAL_BOOSTED=$(( ${{ env.TOTAL_BOOSTED }} + ${{ env.BOOST_THIS_RUN }} ))
-          AVG_PER_RUN=$(( TOTAL_BOOSTED / TOTAL_RUNS ))
-          RUNS_PER_WEEK=$(( 24 * 7 / ${{ inputs.frequency_hours || 6 }} ))
-          WEEKLY_BOOST=$(( ${{ env.BOOST_THIS_RUN }} * RUNS_PER_WEEK ))
+          echo "| Package | Weekly Downloads | Badge |" > table.md
+          echo "|---------|------------------|-------|" >> table.md
+          
+          if [ "$PACKAGE_COUNT" -gt 0 ]; then
+            while IFS= read -r pkg || [ -n "$pkg" ]; do
+              [ -z "$pkg" ] && continue
+              DOWNLOADS=$(curl -s --max-time 8 "https://api.npmjs.org/downloads/point/last-week/$pkg" | jq -r '.downloads // 0')
+              echo "| [$pkg](https://www.npmjs.com/package/$pkg) | $DOWNLOADS | [![Downloads](https://img.shields.io/npm/dw/$pkg)](https://www.npmjs.com/package/$pkg) |" >> table.md
+            done < pkg-list.txt
+          else
+            echo "| *No packages found* | — | — |" >> table.md
+          fi
 
-          # Save stats
+      - name: Calculate cumulative stats
+        run: |
+          TOTAL_RUNS=$((TOTAL_RUNS + 1))
+          TOTAL_BOOSTED=$((TOTAL_BOOSTED + BOOST_THIS_RUN))
+          AVG_PER_RUN=$((TOTAL_RUNS > 0 ? TOTAL_BOOSTED / TOTAL_RUNS : 0))
+          RUNS_PER_WEEK=$(( (24 * 7) / FREQUENCY ))
+          WEEKLY_BOOST=$((BOOST_THIS_RUN * RUNS_PER_WEEK))
+          
+          echo "TOTAL_RUNS=$TOTAL_RUNS" >> $GITHUB_ENV
+          echo "TOTAL_BOOSTED=$TOTAL_BOOSTED" >> $GITHUB_ENV
+          echo "AVG_PER_RUN=$AVG_PER_RUN" >> $GITHUB_ENV
+          echo "WEEKLY_BOOST=$WEEKLY_BOOST" >> $GITHUB_ENV
+
+      - name: Save stats to JSON
+        run: |
+          DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
           jq -n \
             --arg runs "$TOTAL_RUNS" \
             --arg boosted "$TOTAL_BOOSTED" \
             --arg avg "$AVG_PER_RUN" \
             --arg weekly "$WEEKLY_BOOST" \
-            --arg packages "${{ env.PACKAGE_COUNT }}" \
-            --arg last "$(date -u +"%Y-%m-%d %H:%M UTC")" \
-            '{ 
-              totalRuns: ($runs|tonumber), 
-              totalBoosted: ($boosted|tonumber),
-              avgPerRun: ($avg|tonumber),
-              estimatedWeeklyBoost: ($weekly|tonumber),
-              totalPackages: ($packages|tonumber),
-              lastRun: $last
-            }' > stats.json
+            --arg packages "$PACKAGE_COUNT" \
+            --arg last "$DATE" \
+            '{totalRuns: ($runs|tonumber), totalBoosted: ($boosted|tonumber), avgPerRun: ($avg|tonumber), estimatedWeeklyBoost: ($weekly|tonumber), totalPackages: ($packages|tonumber), lastRun: $last}' > stats.json
 
-          # Final README update
+      - name: Update final README
+        run: |
           DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
-          TABLE=$(cat table.md)
+          
+          awk '/<!-- DOWNLOAD_STATS_START -->/,/<!-- DOWNLOAD_STATS_END -->/{next} {print}' README.md > README.md.tmp
+          
+          {
+            cat README.md.tmp
+            echo ""
+            echo "<!-- DOWNLOAD_STATS_START -->"
+            echo "**Last Updated:** $DATE"
+            echo ""
+            echo "### Overview"
+            echo "- Runs every **$FREQUENCY hours** (configurable)"
+            echo "- Installs each package **$REPEATS times** per run (configurable)"
+            echo ""
+            echo "### Cumulative Stats"
+            echo "- **Total Runs:** $TOTAL_RUNS"
+            echo "- **Total Boosted:** $TOTAL_BOOSTED downloads"
+            echo "- **Boosted This Run:** $BOOST_THIS_RUN downloads"
+            echo "- **Average per Run:** $AVG_PER_RUN downloads"
+            echo "- **Total Packages:** $PACKAGE_COUNT"
+            echo "- **Estimated Weekly Boost:** ~$WEEKLY_BOOST downloads"
+            echo "- **Last Run:** $DATE"
+            echo ""
+            echo "### Packages & Weekly Downloads"
+            cat table.md
+            echo "<!-- DOWNLOAD_STATS_END -->"
+          } > README.md
+          
+          rm -f README.md.tmp
 
-          sed -i '/<!-- DOWNLOAD_STATS_START -->/,/<!-- DOWNLOAD_STATS_END -->/c\<!-- DOWNLOAD_STATS_START -->\n**Last Updated:** '"$DATE"'\n\n### Overview\n- Runs every **'"${{ inputs.frequency_hours || 6 }}"' hours**\n- Installs each package **'"${{ inputs.repeats || 100 }}"' times** per run\n\n### Cumulative Stats\n- **Total Runs:** '"$TOTAL_RUNS"'\n- **Total Boosted:** '"$TOTAL_BOOSTED"' downloads\n- **Boosted This Run:** ${{ env.BOOST_THIS_RUN }} downloads\n- **Average per Run:** '"$AVG_PER_RUN"' downloads\n- **Total Packages:** ${{ env.PACKAGE_COUNT }}\n- **Estimated Weekly Boost:** ~'"$WEEKLY_BOOST"' downloads\n- **Last Run:** '"$DATE"'\n\n### Packages & Weekly Downloads\n\n'"$TABLE"'\n<!-- DOWNLOAD_STATS_END -->' README.md
-
-      - name: Commit & Push
+      - name: Commit & Push changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          
           git add README.md stats.json table.md
+          
           if git diff --staged --quiet; then
-            echo "No changes"
+            echo "No changes to commit"
           else
-            git commit -m "chore: update download stats (${{ env.BOOST_THIS_RUN }} this run) [skip ci]"
+            git commit -m "chore: update download stats ($BOOST_THIS_RUN this run) [skip ci]"
             git push
           fi
