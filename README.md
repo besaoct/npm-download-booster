@@ -1,6 +1,8 @@
-# npm download booster
+# npm Download Booster
 
-This repository **automatically boosts** the weekly download count for all npm packages published by **besaoct**.
+This repository **automatically boosts** npm download counts for all packages published by a given npm user.
+
+> **Fork-friendly**: When you fork this repo, it will automatically use **your GitHub username** as the npm username. You can change it anytime.
 
 ## 📊 Download Stats (Auto Updated Every 6 Hours)
 
@@ -25,16 +27,19 @@ This repository **automatically boosts** the weekly download count for all npm p
 
 ---
 
-## How to Use
+## How to Customize (After Forking)
 
-1. Go to **Actions** tab
-2. Select **npm-install-user-pkgs** workflow
-3. Click **"Run workflow"** to manually trigger
+1. Go to **Actions** → **npm-install-user-pkgs** → **Run workflow**
+2. You can change:
+   - **Repeats** (number of installs per package)
+   - **npm username** (your npm username)
+
+## Configuration Options
+
+- **Schedule**: Change the cron expression in the workflow file
+- **Repeats**: Default = 100 (change via manual run or edit workflow)
+- **Username**: Auto-detects from GitHub username on fork
 
 ---
 
-**Note:** The statistics table and badges above are **automatically updated** by GitHub Actions every 6 hours.
-
-## Workflow File
-
-`.github/workflows/npm-install-user-pkgs.yml`
+**Made with ❤️ for package authors**
