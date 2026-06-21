@@ -6,27 +6,6 @@ This repository **automatically boosts** npm download counts for all packages pu
 
 ## 📊 Download Stats (Auto Updated)
 
-<!-- DOWNLOAD_STATS_START -->
-**Last Updated:** Loading...
-
-### Overview
-- Runs every **6 hours** (configurable)
-- Installs each package **100 times** per run (configurable)
-
-### Cumulative Stats
-- **Total Runs:** ...
-- **Total Boosted:** ... downloads
-- **Boosted This Run:** ...
-- **Average per Run:** ... downloads
-- **Total Packages:** ...
-- **Estimated Weekly Boost:** ~... downloads
-- **Last Run:** ...
-
-### Packages & Weekly Downloads
-| Package | Weekly Downloads | Badge |
-|---------|------------------|-------|
-| Loading... | Loading... | Loading... |
-<!-- DOWNLOAD_STATS_END -->
 
 ---
 
@@ -57,3 +36,32 @@ This repository **automatically boosts** npm download counts for all packages pu
 ---
 
 **Made with ❤️ for open source package authors**
+
+
+<!-- DOWNLOAD_STATS_START -->
+**Last Updated:** 2026-06-21 22:27 UTC
+
+### Overview
+- Runs every **6 hours** (configurable)
+- Installs each package **100 times** per run (configurable)
+
+### Cumulative Stats
+- **Total Runs:** 1
+- **Total Boosted:** 700 downloads
+- **Boosted This Run:** 700 downloads
+- **Average per Run:** 700 downloads
+- **Total Packages:** 7
+- **Estimated Weekly Boost:** ~19600 downloads
+- **Last Run:** 2026-06-21 22:27 UTC
+
+### Packages & Weekly Downloads
+| Package | Weekly Downloads | Badge |
+|---------|------------------|-------|
+| [gramobase](https://www.npmjs.com/package/gramobase) | 94 | [![Downloads](https://img.shields.io/npm/dw/gramobase)](https://www.npmjs.com/package/gramobase) |
+| [drivespread](https://www.npmjs.com/package/drivespread) | 37 | [![Downloads](https://img.shields.io/npm/dw/drivespread)](https://www.npmjs.com/package/drivespread) |
+| [create-espkg](https://www.npmjs.com/package/create-espkg) | 1 | [![Downloads](https://img.shields.io/npm/dw/create-espkg)](https://www.npmjs.com/package/create-espkg) |
+| [justy](https://www.npmjs.com/package/justy) | 2 | [![Downloads](https://img.shields.io/npm/dw/justy)](https://www.npmjs.com/package/justy) |
+| [next-react-share](https://www.npmjs.com/package/next-react-share) | 5 | [![Downloads](https://img.shields.io/npm/dw/next-react-share)](https://www.npmjs.com/package/next-react-share) |
+| [genfunc](https://www.npmjs.com/package/genfunc) | 4 | [![Downloads](https://img.shields.io/npm/dw/genfunc)](https://www.npmjs.com/package/genfunc) |
+| [nuniq](https://www.npmjs.com/package/nuniq) | 2 | [![Downloads](https://img.shields.io/npm/dw/nuniq)](https://www.npmjs.com/package/nuniq) |
+<!-- DOWNLOAD_STATS_END -->
