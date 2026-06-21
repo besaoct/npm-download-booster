@@ -1,6 +1,5 @@
 # =============================================================================
 # .github/workflows/npm-install-user-pkgs.yml
-# PRODUCTION-READY VERSION - Cleaned & Fixed
 # =============================================================================
 name: npm-install-user-pkgs
 
