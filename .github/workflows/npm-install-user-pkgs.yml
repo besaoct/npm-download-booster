@@ -28,7 +28,6 @@ on:
         default: '6'
         type: string
 
-# permissions
 permissions:
   contents: write
   pull-requests: write
@@ -50,28 +49,27 @@ jobs:
         run: |
           USERNAME="${{ inputs.username }}"
           USERNAME="${USERNAME:-${{ github.repository_owner }}}"
-         
+          
           REPEATS="${{ inputs.repeats }}"
           REPEATS="${REPEATS:-5}"
-         
+          
           FREQUENCY="${{ inputs.frequency_hours }}"
           FREQUENCY="${FREQUENCY:-6}"
-         
-          # Validation
+          
           if ! [[ "$REPEATS" =~ ^[0-9]+$ ]] || [ "$REPEATS" -lt 1 ]; then
             echo "ERROR: Repeats must be a positive number"
             exit 1
           fi
-         
+          
           if ! [[ "$FREQUENCY" =~ ^[0-9]+$ ]] || [ "$FREQUENCY" -lt 1 ] || [ "$FREQUENCY" -gt 24 ]; then
             echo "ERROR: Frequency must be between 1-24"
             exit 1
           fi
-         
+          
           echo "USERNAME=$USERNAME" >> $GITHUB_ENV
           echo "REPEATS=$REPEATS" >> $GITHUB_ENV
           echo "FREQUENCY=$FREQUENCY" >> $GITHUB_ENV
-         
+          
           echo "✓ Initialized → User: $USERNAME | Repeats: $REPEATS | Frequency: $FREQUENCY hours"
 
       - name: Load Previous Stats
@@ -88,7 +86,7 @@ jobs:
             AVG_PER_RUN=0
             TOTAL_PACKAGES=0
           fi
-         
+          
           echo "TOTAL_RUNS=$TOTAL_RUNS" >> $GITHUB_ENV
           echo "TOTAL_BOOSTED=$TOTAL_BOOSTED" >> $GITHUB_ENV
           echo "AVG_PER_RUN=$AVG_PER_RUN" >> $GITHUB_ENV
@@ -98,13 +96,11 @@ jobs:
         run: |
           DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
           
-          # Initial table
           printf '%s\n' \
             '| Package | Weekly Downloads | Badge |' \
             '|---------|------------------|-------|' \
             '| **Running...** | ... | ... |' > table.md
-
-          # Update README with in-progress status
+          
           awk '/<!-- DOWNLOAD_STATS_START -->/,/<!-- DOWNLOAD_STATS_END -->/{next} {print}' README.md > README.md.tmp
           
           {
@@ -125,6 +121,11 @@ jobs:
             echo "- **Total Packages:** $TOTAL_PACKAGES"
             echo "- **Estimated Weekly Boost:** Calculating..."
             echo "- **Last Run:** $DATE"
+            echo ""
+            echo "### Proxy Usage (This Run)"
+            echo "- **Sources:** ProxyScrape + TheSpeedX"
+            echo "- **Working Proxies:** Testing..."
+            echo "- **Strategy:** Health-checked + Rotated per install"
             echo ""
             echo "### Packages & Weekly Downloads"
             cat table.md
@@ -165,6 +166,38 @@ jobs:
           try { require(process.argv[1]); process.exit(0); } catch(e) { process.exit(1); }
           VERIFY_EOF
           
+          # === Fetch proxies from multiple sources ===
+          echo "Fetching free proxies from multiple sources..."
+          > /tmp/proxies.txt
+          
+          # Source 1: ProxyScrape
+          curl -s "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=text&timeout=8000" >> /tmp/proxies.txt 2>/dev/null || true
+          
+          # Source 2: TheSpeedX Proxy List
+          curl -s "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt" >> /tmp/proxies.txt 2>/dev/null || true
+          
+          # Source 3: Additional ProxyScrape
+          curl -s "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=text&timeout=10000" >> /tmp/proxies.txt 2>/dev/null || true
+          
+          # Clean and unique
+          sort -u /tmp/proxies.txt | grep -E '^(http|https)://' > /tmp/clean_proxies.txt
+          
+          # === Proxy Health Checking ===
+          echo "Testing proxy health..."
+          > /tmp/working_proxies.txt
+          
+          while IFS= read -r proxy || [ -n "$proxy" ]; do
+            [ -z "$proxy" ] && continue
+            if curl -s --max-time 6 --proxy "$proxy" "https://httpbin.org/ip" >/dev/null 2>&1; then
+              echo "$proxy" >> /tmp/working_proxies.txt
+            fi
+          done < /tmp/clean_proxies.txt
+          
+          PROXIES=($(cat /tmp/working_proxies.txt))
+          WORKING_COUNT=${#PROXIES[@]}
+          echo "WORKING_PROXIES=$WORKING_COUNT" >> $GITHUB_ENV
+          echo "Loaded $WORKING_COUNT working proxies"
+          
           TOTAL_INSTALLS=0
           
           while IFS= read -r pkg || [ -n "$pkg" ]; do
@@ -172,14 +205,38 @@ jobs:
             echo "→ Processing $pkg"
             
             for i in $(seq 1 $REPEATS); do
-              npm install "$pkg@latest" --no-audit --no-fund --prefer-offline --silent >/dev/null 2>&1 && \
+              # Aggressive cleanup
+              npm cache clean --force 2>/dev/null || true
+              rm -rf node_modules package-lock.json ~/.npm/_cacache ~/.npm/* 2>/dev/null || true
+              
+              # Random working proxy
+              if [ ${#PROXIES[@]} -gt 0 ]; then
+                PROXY=${PROXIES[$((RANDOM % ${#PROXIES[@]}))]}
+                export HTTP_PROXY=$PROXY
+                export HTTPS_PROXY=$PROXY
+                echo "  └─ Using proxy → $PROXY"
+              else
+                unset HTTP_PROXY HTTPS_PROXY
+                echo "  └─ No proxy"
+              fi
+              
+              # Install
+              npm install "$pkg@latest" \
+                --no-audit --no-fund --prefer-offline --no-cache --ignore-scripts \
+                --silent >/dev/null 2>&1 && \
               node /tmp/verify.js "$pkg" >/dev/null 2>&1 && \
-              TOTAL_INSTALLS=$((TOTAL_INSTALLS + 1))
+              TOTAL_INSTALLS=$((TOTAL_INSTALLS + 1)) && \
+              echo "  └─ ✅ Success" || echo "  └─ ❌ Failed"
               
               npm uninstall "$pkg" >/dev/null 2>&1 || true
               
-              # Random delay 0.4 - 1.8 seconds
-              sleep 0.$((RANDOM % 15 + 4))
+              # Final cleanup
+              npm cache clean --force 2>/dev/null || true
+              rm -rf node_modules package-lock.json ~/.npm/_cacache 2>/dev/null || true
+              
+              # Random delay 2.0 - 15.0 seconds
+              DELAY=$((RANDOM % 130 + 20))
+              sleep 0.$DELAY
             done
           done < "$GITHUB_WORKSPACE/pkg-list.txt"
           
@@ -188,7 +245,9 @@ jobs:
 
       - name: Set boost count for skipped runs
         if: env.SKIP_BOOST == 'true'
-        run: echo "BOOST_THIS_RUN=0" >> $GITHUB_ENV
+        run: |
+          echo "BOOST_THIS_RUN=0" >> $GITHUB_ENV
+          echo "WORKING_PROXIES=0" >> $GITHUB_ENV
 
       - name: Generate download stats table
         run: |
@@ -254,6 +313,12 @@ jobs:
             echo "- **Total Packages:** $PACKAGE_COUNT"
             echo "- **Estimated Weekly Boost:** ~$WEEKLY_BOOST downloads"
             echo "- **Last Run:** $DATE"
+            echo ""
+            echo "### Proxy Usage (This Run)"
+            echo "- **Sources:** ProxyScrape, TheSpeedX/PROXY-List"
+            echo "- **Working Proxies Found:** $WORKING_PROXIES"
+            echo "- **Strategy:** Health-checked + Rotated with random delay"
+            echo "- **Purpose:** Use different IPs to simulate organic traffic"
             echo ""
             echo "### Packages & Weekly Downloads"
             cat table.md
