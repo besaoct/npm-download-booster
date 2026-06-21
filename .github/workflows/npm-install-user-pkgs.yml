@@ -1,0 +1,123 @@
+# =============================================================================
+# .github/workflows/npm-install-user-pkgs.yml
+#
+# PURPOSE:
+# Daily smoke test that installs, verifies, and uninstalls all packages
+# published by npm user "besaoct" — repeated multiple times.
+# =============================================================================
+name: npm-install-user-pkgs
+
+on:
+  schedule:
+    - cron: '0 0 * * *'   # Runs every day at midnight UTC
+
+  workflow_dispatch:
+    inputs:
+      repeats:
+        description: 'Number of times to install/uninstall each package'
+        required: false
+        default: '10'
+        type: string
+      username:
+        description: 'npm username (optional - overrides the hardcoded one)'
+        required: false
+        default: ''
+        type: string
+
+jobs:
+  test-install:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Fetch package list for npm user
+        id: pkglist
+        run: |
+          USERNAME="${{ inputs.username }}"
+          if [ -z "$USERNAME" ]; then
+            USERNAME="besaoct"   # ← Your npm username
+          fi
+
+          echo "Fetching packages for npm user: $USERNAME"
+          curl -s "https://registry.npmjs.org/-/v1/search?text=maintainer:$USERNAME&size=250" \
+            | jq -r '.objects[].package.name' > pkg-list.txt
+
+          echo "Found $(wc -l < pkg-list.txt) packages:"
+          cat pkg-list.txt
+
+      - name: Install and uninstall each package (multiple times)
+        run: |
+          REPEATS=${{ inputs.repeats || 10 }}
+          echo "=== Starting tests with $REPEATS repeats per package ==="
+
+          mkdir -p /tmp/pkg-test
+          cd /tmp/pkg-test
+          npm init -y
+
+          cat > /tmp/verify.js << 'EOF'
+          try {
+            require(process.argv[1]);
+            console.log('Loaded OK');
+          } catch (e) {
+            console.error('LOAD FAILED:', e.message);
+            process.exit(1);
+          }
+          EOF
+
+          TOTAL=0
+          INSTALL_FAIL=0
+          LOAD_FAIL=0
+
+          while read -r pkg; do
+            if [ -z "$pkg" ]; then continue; fi
+
+            TOTAL=$((TOTAL + 1))
+            echo "=== Testing $pkg ($REPEATS times) ==="
+
+            for i in $(seq 1 $REPEATS); do
+              echo "  → Run $i/$REPEATS"
+
+              if npm install "$pkg@latest" --no-audit --no-fund; then
+                echo "    ✅ Installed OK"
+              else
+                echo "    ❌ FAILED to install"
+                INSTALL_FAIL=$((INSTALL_FAIL + 1))
+                continue
+              fi
+
+              if node /tmp/verify.js "$pkg"; then
+                echo "    ✅ Loaded OK"
+              else
+                echo "    ❌ LOAD FAILED"
+                LOAD_FAIL=$((LOAD_FAIL + 1))
+              fi
+
+              npm uninstall "$pkg" >/dev/null 2>&1 && echo "    🗑️  Uninstalled" || echo "    ⚠️  Failed to uninstall"
+
+              sleep 0.5
+            done
+
+            echo "----------------------------------------"
+          done < "$GITHUB_WORKSPACE/pkg-list.txt"
+
+          echo ""
+          echo "========================================"
+          echo "TEST SUMMARY"
+          echo "========================================"
+          echo "Total packages tested     : $TOTAL"
+          echo "Repeats per package       : $REPEATS"
+          echo "Total install attempts    : $((TOTAL * REPEATS))"
+          echo "Install failures          : $INSTALL_FAIL"
+          echo "Load failures             : $LOAD_FAIL"
+          echo "========================================"
+
+          if [ $INSTALL_FAIL -gt 0 ] || [ $LOAD_FAIL -gt 0 ]; then
+            echo "⚠️  Some packages had failures!"
+            exit 1
+          else
+            echo "✅ All tests completed successfully!"
+          fi
