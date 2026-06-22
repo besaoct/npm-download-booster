@@ -2,7 +2,6 @@
 # .github/workflows/npm-install-user-pkgs.yml
 # =============================================================================
 name: npm-install-user-pkgs
-
 on:
   push:
     branches: [ main, master ]
@@ -27,7 +26,6 @@ on:
         required: false
         default: '6'
         type: string
-
 permissions:
   contents: write
   pull-requests: write
@@ -76,6 +74,14 @@ jobs:
           else
             TOTAL_RUNS=0; TOTAL_BOOSTED=0; AVG_PER_RUN=0; TOTAL_PACKAGES=0
           fi
+          
+          # Load per-package stats
+          if [ -f "pkg-stats.json" ]; then
+            echo "PKG_STATS_LOADED=true" >> $GITHUB_ENV
+          else
+            echo "PKG_STATS_LOADED=false" >> $GITHUB_ENV
+          fi
+          
           echo "TOTAL_RUNS=$TOTAL_RUNS" >> $GITHUB_ENV
           echo "TOTAL_BOOSTED=$TOTAL_BOOSTED" >> $GITHUB_ENV
           echo "AVG_PER_RUN=$AVG_PER_RUN" >> $GITHUB_ENV
@@ -85,16 +91,15 @@ jobs:
         run: |
           DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
           printf '%s\n' \
-            '| Package | Badge |' \
-            '|---------|-------|' \
-            '| **Running...** | ... |' > table.md
+            '| Package | Badge | Total Boosted | Est. Weekly |' \
+            '|---------|-------|---------------|-------------|' \
+            '| **Running...** | ... | ... | ... |' > table.md
           
-          awk '/<!-- DOWNLOAD_STATS_START -->/,/<!-- DOWNLOAD_STATS_END -->/{next} {print}' README.md > README.md.tmp
+          awk '//,//{next} {print}' README.md > README.md.tmp 2>/dev/null || true
           
           {
-            cat README.md.tmp
+            cat README.md.tmp 2>/dev/null || echo "# npm Download Booster"
             echo ""
-            echo "<!-- DOWNLOAD_STATS_START -->"
             echo "**Last Updated:** $DATE *(In Progress)*"
             echo ""
             echo "### Overview"
@@ -105,9 +110,9 @@ jobs:
             echo "- Strategy: Fresh proxy per install → Direct fallback"
             echo "- Sources: ProxyScrape, TheSpeedX, Proxifly, Monosans"
             echo ""
-            echo "### Packages & Weekly Downloads"
+            echo "### Packages & Stats"
             cat table.md
-            echo "<!-- DOWNLOAD_STATS_END -->"
+            echo ""
           } > README.md
           rm -f README.md.tmp
 
@@ -116,7 +121,7 @@ jobs:
         run: |
           RESPONSE=$(curl -s --max-time 15 "https://registry.npmjs.org/-/v1/search?text=maintainer:$USERNAME&size=250")
           echo "$RESPONSE" | jq -r '.objects[].package.name' 2>/dev/null > pkg-list.txt || echo "" > pkg-list.txt
-          PACKAGE_COUNT=$(grep -cv '^$' pkg-list.txt 2>/dev/null || echo "0")
+          PACKAGE_COUNT=$(grep -c '^[^[:space:]]' pkg-list.txt 2>/dev/null || echo "0")
           echo "PACKAGE_COUNT=$PACKAGE_COUNT" >> $GITHUB_ENV
           if [ "$PACKAGE_COUNT" -eq 0 ]; then
             echo "SKIP_BOOST=true" >> $GITHUB_ENV
@@ -138,6 +143,9 @@ jobs:
           TOTAL_INSTALLS=0
           PROXY_ATTEMPTS=0
           PROXY_SUCCESSES=0
+          
+          # Per-package tracking for this run
+          declare -A THIS_RUN_BOOST
           
           get_fresh_proxy() {
             > /tmp/current_proxies.txt
@@ -162,9 +170,10 @@ jobs:
           while IFS= read -r pkg || [ -n "$pkg" ]; do
             [ -z "$pkg" ] && continue
             echo "→ Processing: $pkg"
+            THIS_RUN_BOOST["$pkg"]=0
             
             for i in $(seq 1 $REPEATS); do
-              echo "   └─ Install $i/$REPEATS"
+              echo " └─ Install $i/$REPEATS"
               
               # Aggressive cleanup
               npm cache clean --force 2>/dev/null || true
@@ -179,19 +188,20 @@ jobs:
                   PROXY_ATTEMPTS=$((PROXY_ATTEMPTS + 1))
                   export HTTP_PROXY=$PROXY
                   export HTTPS_PROXY=$PROXY
-                  echo "     └─ Attempt $attempt | Proxy: $PROXY"
+                  echo " └─ Attempt $attempt | Proxy: $PROXY"
                   
                   if npm install "$pkg@latest" --no-audit --no-fund --prefer-offline --no-cache --ignore-scripts \
                     --strict-ssl=false --silent 2>install.log; then
                     if node /tmp/verify.js "$pkg" >/dev/null 2>&1; then
                       TOTAL_INSTALLS=$((TOTAL_INSTALLS + 1))
+                      THIS_RUN_BOOST["$pkg"]=$((THIS_RUN_BOOST["$pkg"] + 1))
                       PROXY_SUCCESSES=$((PROXY_SUCCESSES + 1))
-                      echo "     └─ ✅ Success (via Proxy)"
+                      echo " └─ ✅ Success (via Proxy)"
                       SUCCESS=1
                       break
                     fi
                   fi
-                  echo "     └─ Proxy attempt $attempt failed"
+                  echo " └─ Proxy attempt $attempt failed"
                   cat install.log 2>/dev/null || true
                   sleep 2
                 done
@@ -201,24 +211,25 @@ jobs:
               if [ $SUCCESS -eq 0 ]; then
                 unset HTTP_PROXY HTTPS_PROXY
                 for attempt in {1..2}; do
-                  echo "     └─ Attempt $attempt | Direct connection (fallback)"
+                  echo " └─ Attempt $attempt | Direct connection (fallback)"
                   if npm install "$pkg@latest" --no-audit --no-fund --prefer-offline --no-cache --ignore-scripts \
                     --strict-ssl=false --silent 2>install.log; then
                     if node /tmp/verify.js "$pkg" >/dev/null 2>&1; then
                       TOTAL_INSTALLS=$((TOTAL_INSTALLS + 1))
-                      echo "     └─ ✅ Success (Direct)"
+                      THIS_RUN_BOOST["$pkg"]=$((THIS_RUN_BOOST["$pkg"] + 1))
+                      echo " └─ ✅ Success (Direct)"
                       SUCCESS=1
                       break
                     fi
                   fi
-                  echo "     └─ Direct attempt $attempt failed"
+                  echo " └─ Direct attempt $attempt failed"
                   cat install.log 2>/dev/null || true
                   sleep 2
                 done
               fi
               
               if [ $SUCCESS -eq 0 ]; then
-                echo "     └─ ❌ Failed after all attempts for $pkg"
+                echo " └─ ❌ Failed after all attempts for $pkg"
               fi
               
               npm uninstall "$pkg" >/dev/null 2>&1 || true
@@ -229,6 +240,11 @@ jobs:
               sleep 0.$DELAY
             done
           done < "$GITHUB_WORKSPACE/pkg-list.txt"
+          
+          # Export per-package this-run boosts
+          for pkg in "${!THIS_RUN_BOOST[@]}"; do
+            echo "THIS_RUN_${pkg//[^a-zA-Z0-9]/_}=${THIS_RUN_BOOST[$pkg]}" >> $GITHUB_ENV
+          done
           
           echo "BOOST_THIS_RUN=$TOTAL_INSTALLS" >> $GITHUB_ENV
           echo "PROXY_ATTEMPTS=$PROXY_ATTEMPTS" >> $GITHUB_ENV
@@ -242,16 +258,52 @@ jobs:
           echo "PROXY_ATTEMPTS=0" >> $GITHUB_ENV
           echo "PROXY_SUCCESSES=0" >> $GITHUB_ENV
 
+      - name: Load and Update Per-Package Stats
+        run: |
+          # Initialize or load pkg-stats.json
+          if [ -f "pkg-stats.json" ]; then
+            cp pkg-stats.json pkg-stats.json.bak
+          else
+            jq -n '{packages: {}, totalRuns: 0, lastUpdated: ""}' > pkg-stats.json
+          fi
+          
+          # Update per-package stats
+          UPDATED=0
+          while IFS= read -r pkg || [ -n "$pkg" ]; do
+            [ -z "$pkg" ] && continue
+            VAR_NAME="THIS_RUN_${pkg//[^a-zA-Z0-9]/_}"
+            THIS_BOOST=${!VAR_NAME:-0}
+            
+            if [ "$THIS_BOOST" -gt 0 ] || [ "$UPDATED" -eq 0 ]; then
+              jq --arg pkg "$pkg" --argjson boost "$THIS_BOOST" '
+                .packages[$pkg] |= (if . == null then {totalBoosted: 0} else . end) |
+                .packages[$pkg].totalBoosted += $boost
+              ' pkg-stats.json > pkg-stats.json.tmp && mv pkg-stats.json.tmp pkg-stats.json
+              UPDATED=1
+            fi
+          done < pkg-list.txt
+          
+          # Update global run count in pkg-stats
+          jq --argjson runs "$((TOTAL_RUNS + 1))" '
+            .totalRuns = $runs
+          ' pkg-stats.json > pkg-stats.json.tmp && mv pkg-stats.json.tmp pkg-stats.json
+
       - name: Generate download stats table
         run: |
-          echo "| Package | Badge |" > table.md
-          echo "|---------|-------|" >> table.md
+          echo "| Package | Badge | Total Boosted | Est. Weekly |" > table.md
+          echo "|---------|-------|---------------|-------------|" >> table.md
+          
           if [ "$PACKAGE_COUNT" -gt 0 ]; then
             while IFS= read -r pkg || [ -n "$pkg" ]; do
-              echo "| [$pkg](https://www.npmjs.com/package/$pkg) | [![Downloads](https://img.shields.io/npm/dw/$pkg)](https://www.npmjs.com/package/$pkg) |" >> table.md
+              TOTAL_PKG=$(jq -r --arg p "$pkg" '.packages[$p].totalBoosted // 0' pkg-stats.json 2>/dev/null || echo "0")
+              RUNS_PER_WEEK=$(( (24 * 7) / FREQUENCY ))
+              EST_WEEKLY=$((TOTAL_PKG * RUNS_PER_WEEK / TOTAL_RUNS ))  # rough average-based estimate
+              if [ "$TOTAL_RUNS" -eq 0 ]; then EST_WEEKLY=0; fi
+              
+              echo "| $pkg | <img alt=\"Downloads\" src=\"https://img.shields.io/npm/dw/$pkg\"> | $TOTAL_PKG | ~$EST_WEEKLY |" >> table.md
             done < pkg-list.txt
           else
-            echo "| *No packages found* | — |" >> table.md
+            echo "| *No packages found* | — | — | — |" >> table.md
           fi
 
       - name: Calculate cumulative stats
@@ -261,6 +313,7 @@ jobs:
           AVG_PER_RUN=$((TOTAL_RUNS > 0 ? TOTAL_BOOSTED / TOTAL_RUNS : 0))
           RUNS_PER_WEEK=$(( (24 * 7) / FREQUENCY ))
           WEEKLY_BOOST=$((BOOST_THIS_RUN * RUNS_PER_WEEK))
+          
           echo "TOTAL_RUNS=$TOTAL_RUNS" >> $GITHUB_ENV
           echo "TOTAL_BOOSTED=$TOTAL_BOOSTED" >> $GITHUB_ENV
           echo "AVG_PER_RUN=$AVG_PER_RUN" >> $GITHUB_ENV
@@ -281,12 +334,11 @@ jobs:
       - name: Update final README
         run: |
           DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
-          awk '/<!-- DOWNLOAD_STATS_START -->/,/<!-- DOWNLOAD_STATS_END -->/{next} {print}' README.md > README.md.tmp
+          awk '//,//{next} {print}' README.md > README.md.tmp 2>/dev/null || true
           
           {
-            cat README.md.tmp
+            cat README.md.tmp 2>/dev/null || echo "# npm Download Booster"
             echo ""
-            echo "<!-- DOWNLOAD_STATS_START -->"
             echo "**Last Updated:** $DATE"
             echo ""
             echo "### Overview"
@@ -311,9 +363,11 @@ jobs:
             fi
             echo "- **Sources:** ProxyScrape, TheSpeedX, Proxifly, Monosans"
             echo ""
-            echo "### Packages & Weekly Downloads"
+            echo "### Packages & Stats"
             cat table.md
-            echo "<!-- DOWNLOAD_STATS_END -->"
+            echo ""
+            echo "*Total Boosted = cumulative successful installs across all runs*"
+            echo "*Est. Weekly = based on historical average*"
           } > README.md
           rm -f README.md.tmp
 
@@ -321,7 +375,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add README.md stats.json table.md
+          git add README.md stats.json pkg-stats.json table.md pkg-list.txt 2>/dev/null || true
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
