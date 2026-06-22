@@ -95,14 +95,6 @@ jobs:
             echo ""
             echo "**Last Updated:** $DATE *(In Progress)*"
             echo ""
-            echo "### Overview"
-            echo "- Runs every **$FREQUENCY hours** (configurable)"
-            echo "- Installs each package **$REPEATS times** per run (configurable)"
-            echo ""
-            echo "### Proxy Usage"
-            echo "- Strategy: Fresh proxy per install → Direct fallback"
-            echo "- Sources: ProxyScrape, TheSpeedX, Proxifly, Monosans"
-            echo ""
             echo "### Packages & Stats"
             cat table.md
             echo ""
@@ -312,10 +304,39 @@ jobs:
       - name: Update final README
         run: |
           DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
-          awk '//,//{next} {print}' README.md > README.md.tmp 2>/dev/null || true
           
           {
-            cat README.md.tmp 2>/dev/null || echo "# npm Download Booster"
+            echo "# npm Download Booster"
+            echo ""
+            echo "This repository automatically boosts npm download counts for all packages published by a given npm user."
+            echo ""
+            echo "**Fork-friendly:** When you fork this repo, it will automatically use your GitHub username as the npm username (you can override it anytime via workflow dispatch)."
+            echo ""
+            echo "## How to Use"
+            echo ""
+            echo "1. Fork this repository"
+            echo "2. Go to **Actions → npm-install-user-pkgs → Run workflow**"
+            echo "3. Configure the inputs:"
+            echo "   - **Repeats** — Number of installs per package (default: 1)"
+            echo "   - **Username** — Your npm username (default: GitHub username)"
+            echo "   - **Frequency (hours)** — How often it runs (default: 6)"
+            echo ""
+            echo "## Configuration Options"
+            echo ""
+            echo "| Option | Description | Default | How to Change |"
+            echo "| --- | --- | --- | --- |"
+            echo "| Frequency | Run every X hours | $FREQUENCY | Workflow dispatch or edit cron |"
+            echo "| Repeats | Installs per package per run | $REPEATS | Manual trigger |"
+            echo "| Username | npm username to boost | GitHub owner | Manual trigger |"
+            echo ""
+            echo "⚠️ **Important Notes**"
+            echo ""
+            echo "- This tool uses real \`npm install\` commands — each install counts as a legitimate download on npm."
+            echo "- GitHub Actions has free minute limits (especially on public repositories)."
+            echo "- npm may apply rate limiting if you use very high repeats or very low frequency."
+            echo "- Use responsibly and respect npm's Terms of Service."
+            echo ""
+            echo "## 📊 Download Stats (Auto Updated)"
             echo ""
             echo "**Last Updated:** $DATE"
             echo ""
@@ -346,7 +367,6 @@ jobs:
             echo ""
             echo "*Package names are linked to their npm page. Total Boosted = lifetime successful installs.*"
           } > README.md
-          rm -f README.md.tmp
 
       - name: Commit & Push changes
         run: |
