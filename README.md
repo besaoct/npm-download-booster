@@ -30,7 +30,7 @@ This repository automatically boosts npm download counts for all packages publis
 
 ## 📊 Download Stats (Auto Updated)
 
-**Last Updated:** 2026-06-22 09:54 UTC
+**Last Updated:** 2026-06-22 14:38 UTC
 
 ### Overview
 - Runs every **6 hours** (configurable)
@@ -43,13 +43,13 @@ This repository automatically boosts npm download counts for all packages publis
 - **Average per Run:** 7 downloads
 - **Total Packages:** 7
 - **Estimated Weekly Boost:** ~196 downloads
-- **Last Run:** 2026-06-22 09:54 UTC
+- **Last Run:** 2026-06-22 14:38 UTC
 
 ### Proxy Usage (This Run)
 - **Strategy:** Proxy first → Direct fallback
-- **Proxy Attempts:** 17
-- **Proxy Successes:** 2
-- **Proxy Success Rate:** 11%
+- **Proxy Attempts:** 21
+- **Proxy Successes:** 0
+- **Proxy Success Rate:** 0%
 - **Sources:** ProxyScrape, TheSpeedX, Proxifly, Monosans
 
 ### Packages & Stats
