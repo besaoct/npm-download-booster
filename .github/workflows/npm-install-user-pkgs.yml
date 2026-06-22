@@ -159,28 +159,22 @@ jobs:
           
           TOTAL_INSTALLS=0
           
-          # Function: Get a fresh working proxy before each install
           get_fresh_proxy() {
             > /tmp/current_proxies.txt
-            
-            # Fetch from multiple sources
             curl -s "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=text&timeout=12000" >> /tmp/current_proxies.txt || true
             curl -s "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt" >> /tmp/current_proxies.txt || true
             curl -s "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt" >> /tmp/current_proxies.txt || true
             
-            # Filter HTTP/HTTPS only and shuffle
             grep -E '^(http|https)://' /tmp/current_proxies.txt | sort -u | shuf > /tmp/shuffled_proxies.txt
             
-            # Test up to 8 proxies
             while IFS= read -r proxy || [ -n "$proxy" ]; do
               [ -z "$proxy" ] && continue
               if curl -s --max-time 8 --proxy "$proxy" "http://httpbin.org/ip" >/dev/null 2>&1; then
                 echo "$proxy"
                 return 0
               fi
-            done < <(head -n 8 /tmp/shuffled_proxies.txt)
-            
-            echo ""  # Return empty if no working proxy
+            done < <(head -n 10 /tmp/shuffled_proxies.txt)
+            echo ""
             return 1
           }
           
@@ -189,36 +183,50 @@ jobs:
             echo "→ Processing $pkg"
             
             for i in $(seq 1 $REPEATS); do
-              # Aggressive cleanup - treat as new install
               npm cache clean --force 2>/dev/null || true
               rm -rf node_modules package-lock.json ~/.npm/_cacache ~/.npm/* 2>/dev/null || true
               
-              # Get fresh proxy for this specific install
               PROXY=$(get_fresh_proxy)
-              if [ -n "$PROXY" ]; then
-                export HTTP_PROXY=$PROXY
-                export HTTPS_PROXY=$PROXY
-                echo "  └─ Fresh proxy → $PROXY"
-              else
-                unset HTTP_PROXY HTTPS_PROXY
-                echo "  └─ No working proxy (direct)"
+              SUCCESS=0
+              
+              for attempt in {1..3}; do
+                if [ -n "$PROXY" ]; then
+                  export HTTP_PROXY=$PROXY
+                  export HTTPS_PROXY=$PROXY
+                  echo "  └─ Attempt $attempt | Proxy: $PROXY"
+                  EXTRA_FLAGS="--strict-ssl=false"
+                else
+                  unset HTTP_PROXY HTTPS_PROXY
+                  echo "  └─ Attempt $attempt | Direct connection"
+                  EXTRA_FLAGS=""
+                fi
+                
+                # Install with better error handling
+                if npm install "$pkg@latest" \
+                  --no-audit --no-fund --prefer-offline --no-cache --ignore-scripts \
+                  $EXTRA_FLAGS --silent 2>install.log; then
+                  
+                  if node /tmp/verify.js "$pkg" >/dev/null 2>&1; then
+                    TOTAL_INSTALLS=$((TOTAL_INSTALLS + 1))
+                    echo "  └─ ✅ Success"
+                    SUCCESS=1
+                    break
+                  fi
+                fi
+                
+                echo "  └─ Attempt $attempt failed"
+                cat install.log 2>/dev/null || true
+                sleep 2
+              done
+              
+              if [ $SUCCESS -eq 0 ]; then
+                echo "  └─ ❌ All attempts failed for $pkg"
               fi
               
-              # Install package
-              npm install "$pkg@latest" \
-                --no-audit --no-fund --prefer-offline --no-cache --ignore-scripts \
-                --silent >/dev/null 2>&1 && \
-              node /tmp/verify.js "$pkg" >/dev/null 2>&1 && \
-              TOTAL_INSTALLS=$((TOTAL_INSTALLS + 1)) && \
-              echo "  └─ ✅ Success" || echo "  └─ ❌ Failed"
-              
               npm uninstall "$pkg" >/dev/null 2>&1 || true
-              
-              # Final cleanup
               npm cache clean --force 2>/dev/null || true
               rm -rf node_modules package-lock.json ~/.npm/_cacache 2>/dev/null || true
               
-              # Random delay (2.0 - 15.0 seconds)
               DELAY=$((RANDOM % 130 + 20))
               sleep 0.$DELAY
             done
