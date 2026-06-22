@@ -95,7 +95,6 @@ jobs:
       - name: Create Initial Status & Update README
         run: |
           DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
-          
           printf '%s\n' \
             '| Package | Weekly Downloads | Badge |' \
             '|---------|------------------|-------|' \
@@ -114,9 +113,8 @@ jobs:
             echo "- Installs each package **$REPEATS times** per run (configurable)"
             echo ""
             echo "### Proxy Usage"
-            echo "- **Strategy:** Fresh proxy tested before each install → fallback to direct"
-            echo "- **Sources:** ProxyScrape, TheSpeedX, Proxifly + others"
-            echo "- **Note:** Proxies are unreliable — many will fail"
+            echo "- **Strategy:** Try fresh proxy first → fallback to direct if proxy fails"
+            echo "- **Sources:** ProxyScrape, TheSpeedX, Proxifly, Monosans"
             echo ""
             echo "### Packages & Weekly Downloads"
             cat table.md
@@ -124,15 +122,12 @@ jobs:
           } > README.md
           
           rm -f README.md.tmp
-          echo "✓ Initial README updated (In Progress)"
 
       - name: Fetch packages from npm registry
         id: fetch_packages
         run: |
           echo "Fetching packages for maintainer: $USERNAME"
-          
           RESPONSE=$(curl -s --max-time 15 "https://registry.npmjs.org/-/v1/search?text=maintainer:$USERNAME&size=250")
-          
           echo "$RESPONSE" | jq -r '.objects[].package.name' 2>/dev/null > pkg-list.txt || echo "" > pkg-list.txt
           
           PACKAGE_COUNT=$(grep -cv '^$' pkg-list.txt 2>/dev/null || echo "0")
@@ -168,7 +163,7 @@ jobs:
             curl -s "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt" >> /tmp/current_proxies.txt || true
             curl -s "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt" >> /tmp/current_proxies.txt || true
             
-            grep -E '^(http|https)://' /tmp/current_proxies.txt | sort -u | shuf > /tmp/shuffled.txt
+            grep -E '^(http|https)://' /tmp/current_proxies.txt | sort -u | shuf > /tmp/shuffled.txt 2>/dev/null || true
             
             while IFS= read -r proxy || [ -n "$proxy" ]; do
               [ -z "$proxy" ] && continue
@@ -176,7 +171,7 @@ jobs:
                 echo "$proxy"
                 return 0
               fi
-            done < <(head -n 12 /tmp/shuffled.txt)
+            done < <(head -n 10 /tmp/shuffled.txt 2>/dev/null)
             echo ""
             return 1
           }
@@ -189,44 +184,55 @@ jobs:
               npm cache clean --force 2>/dev/null || true
               rm -rf node_modules package-lock.json ~/.npm/_cacache ~/.npm/* 2>/dev/null || true
               
-              PROXY=$(get_fresh_proxy)
               SUCCESS=0
               
-              for attempt in {1..3}; do
-                if [ -n "$PROXY" ]; then
+              # Try Proxy first
+              PROXY=$(get_fresh_proxy)
+              if [ -n "$PROXY" ]; then
+                for attempt in {1..3}; do
                   PROXY_ATTEMPTS=$((PROXY_ATTEMPTS + 1))
                   export HTTP_PROXY=$PROXY
                   export HTTPS_PROXY=$PROXY
                   echo "  └─ Attempt $attempt | Proxy: $PROXY"
-                  EXTRA="--strict-ssl=false"
-                else
-                  unset HTTP_PROXY HTTPS_PROXY
-                  echo "  └─ Attempt $attempt | Direct connection"
-                  EXTRA=""
-                fi
-                
-                if npm install "$pkg@latest" \
-                  --no-audit --no-fund --prefer-offline --no-cache --ignore-scripts \
-                  $EXTRA --silent 2>install.log; then
                   
-                  if node /tmp/verify.js "$pkg" >/dev/null 2>&1; then
-                    TOTAL_INSTALLS=$((TOTAL_INSTALLS + 1))
-                    if [ -n "$PROXY" ]; then
+                  if npm install "$pkg@latest" --no-audit --no-fund --prefer-offline --no-cache --ignore-scripts \
+                    --strict-ssl=false --silent 2>install.log; then
+                    if node /tmp/verify.js "$pkg" >/dev/null 2>&1; then
+                      TOTAL_INSTALLS=$((TOTAL_INSTALLS + 1))
                       PROXY_SUCCESSES=$((PROXY_SUCCESSES + 1))
+                      echo "  └─ ✅ Success (via Proxy)"
+                      SUCCESS=1
+                      break
                     fi
-                    echo "  └─ ✅ Success"
-                    SUCCESS=1
-                    break
                   fi
-                fi
-                
-                echo "  └─ Attempt $attempt failed"
-                cat install.log 2>/dev/null || true
-                sleep 3
-              done
+                  echo "  └─ Proxy attempt $attempt failed"
+                  cat install.log 2>/dev/null || true
+                  sleep 2
+                done
+              fi
+              
+              # Fallback to Direct if proxy failed
+              if [ $SUCCESS -eq 0 ]; then
+                unset HTTP_PROXY HTTPS_PROXY
+                for attempt in {1..2}; do
+                  echo "  └─ Attempt $attempt | Direct connection (fallback)"
+                  if npm install "$pkg@latest" --no-audit --no-fund --prefer-offline --no-cache --ignore-scripts \
+                    --strict-ssl=false --silent 2>install.log; then
+                    if node /tmp/verify.js "$pkg" >/dev/null 2>&1; then
+                      TOTAL_INSTALLS=$((TOTAL_INSTALLS + 1))
+                      echo "  └─ ✅ Success (Direct)"
+                      SUCCESS=1
+                      break
+                    fi
+                  fi
+                  echo "  └─ Direct attempt $attempt failed"
+                  cat install.log 2>/dev/null || true
+                  sleep 2
+                done
+              fi
               
               if [ $SUCCESS -eq 0 ]; then
-                echo "  └─ ❌ Failed after 3 attempts for $pkg"
+                echo "  └─ ❌ All attempts failed for $pkg (skipping)"
               fi
               
               npm uninstall "$pkg" >/dev/null 2>&1 || true
@@ -254,7 +260,6 @@ jobs:
         run: |
           echo "| Package | Weekly Downloads | Badge |" > table.md
           echo "|---------|------------------|-------|" >> table.md
-          
           if [ "$PACKAGE_COUNT" -gt 0 ]; then
             while IFS= read -r pkg || [ -n "$pkg" ]; do
               [ -z "$pkg" ] && continue
@@ -272,7 +277,6 @@ jobs:
           AVG_PER_RUN=$((TOTAL_RUNS > 0 ? TOTAL_BOOSTED / TOTAL_RUNS : 0))
           RUNS_PER_WEEK=$(( (24 * 7) / FREQUENCY ))
           WEEKLY_BOOST=$((BOOST_THIS_RUN * RUNS_PER_WEEK))
-          
           echo "TOTAL_RUNS=$TOTAL_RUNS" >> $GITHUB_ENV
           echo "TOTAL_BOOSTED=$TOTAL_BOOSTED" >> $GITHUB_ENV
           echo "AVG_PER_RUN=$AVG_PER_RUN" >> $GITHUB_ENV
@@ -293,7 +297,6 @@ jobs:
       - name: Update final README
         run: |
           DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
-          
           awk '/<!-- DOWNLOAD_STATS_START -->/,/<!-- DOWNLOAD_STATS_END -->/{next} {print}' README.md > README.md.tmp
           
           {
@@ -316,7 +319,7 @@ jobs:
             echo "- **Last Run:** $DATE"
             echo ""
             echo "### Proxy Usage (This Run)"
-            echo "- **Strategy:** Fresh proxy per install + fallback to direct"
+            echo "- **Strategy:** Proxy first → Direct fallback"
             echo "- **Proxy Attempts:** $PROXY_ATTEMPTS"
             echo "- **Proxy Successes:** $PROXY_SUCCESSES"
             if [ "$PROXY_ATTEMPTS" -gt 0 ]; then
@@ -328,16 +331,13 @@ jobs:
             cat table.md
             echo "<!-- DOWNLOAD_STATS_END -->"
           } > README.md
-          
           rm -f README.md.tmp
 
       - name: Commit & Push changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          
           git add README.md stats.json table.md
-          
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
