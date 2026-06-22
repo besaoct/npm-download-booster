@@ -2,6 +2,12 @@
 # .github/workflows/npm-install-user-pkgs.yml
 # =============================================================================
 name: npm-install-user-pkgs
+
+# Cancel previous runs if a new commit is pushed
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [ main, master ]
@@ -26,6 +32,7 @@ on:
         required: false
         default: '6'
         type: string
+
 permissions:
   contents: write
   pull-requests: write
@@ -236,46 +243,6 @@ jobs:
           echo "PROXY_ATTEMPTS=0" >> $GITHUB_ENV
           echo "PROXY_SUCCESSES=0" >> $GITHUB_ENV
 
-      - name: Load and Update Per-Package Stats
-        run: |
-          if [ -f "pkg-stats.json" ]; then
-            cp pkg-stats.json pkg-stats.json.bak
-          else
-            jq -n '{packages: {}, totalRuns: 0, lastUpdated: ""}' > pkg-stats.json
-          fi
-          
-          while IFS= read -r pkg || [ -n "$pkg" ]; do
-            [ -z "$pkg" ] && continue
-            VAR_NAME="THIS_RUN_${pkg//[^a-zA-Z0-9]/_}"
-            THIS_BOOST=${!VAR_NAME:-0}
-            
-            jq --arg pkg "$pkg" --argjson boost "$THIS_BOOST" '
-              .packages[$pkg] |= (if . == null then {totalBoosted: 0} else . end) |
-              .packages[$pkg].totalBoosted += $boost
-            ' pkg-stats.json > pkg-stats.json.tmp && mv pkg-stats.json.tmp pkg-stats.json
-          done < pkg-list.txt
-          
-          jq --argjson runs "$((TOTAL_RUNS + 1))" '
-            .totalRuns = $runs
-          ' pkg-stats.json > pkg-stats.json.tmp && mv pkg-stats.json.tmp pkg-stats.json
-
-      - name: Generate download stats table
-        run: |
-          echo "| Package | Badge | Total Boosted | Est. Weekly |" > table.md
-          echo "|---------|-------|---------------|-------------|" >> table.md
-          
-          if [ "$PACKAGE_COUNT" -gt 0 ]; then
-            while IFS= read -r pkg || [ -n "$pkg" ]; do
-              TOTAL_PKG=$(jq -r --arg p "$pkg" '.packages[$p].totalBoosted // 0' pkg-stats.json 2>/dev/null || echo "0")
-              RUNS_PER_WEEK=$(( (24 * 7) / FREQUENCY ))
-              EST_WEEKLY=$(( TOTAL_RUNS > 0 ? (TOTAL_PKG * RUNS_PER_WEEK) / TOTAL_RUNS : 0 ))
-              
-              echo "| [$pkg](https://www.npmjs.com/package/$pkg) | <img alt=\"Downloads\" src=\"https://img.shields.io/npm/dw/$pkg\"> | $TOTAL_PKG | ~$EST_WEEKLY |" >> table.md
-            done < pkg-list.txt
-          else
-            echo "| *No packages found* | — | — | — |" >> table.md
-          fi
-
       - name: Calculate cumulative stats
         run: |
           TOTAL_RUNS=$((TOTAL_RUNS + 1))
@@ -288,6 +255,48 @@ jobs:
           echo "TOTAL_BOOSTED=$TOTAL_BOOSTED" >> $GITHUB_ENV
           echo "AVG_PER_RUN=$AVG_PER_RUN" >> $GITHUB_ENV
           echo "WEEKLY_BOOST=$WEEKLY_BOOST" >> $GITHUB_ENV
+          echo "RUNS_PER_WEEK=$RUNS_PER_WEEK" >> $GITHUB_ENV
+
+      - name: Load and Update Per-Package Stats
+        run: |
+          DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
+          if [ -f "pkg-stats.json" ]; then
+            cp pkg-stats.json pkg-stats.json.bak
+          else
+            jq -n '{packages: {}, totalRuns: 0, lastUpdated: ""}' > pkg-stats.json
+          fi
+          
+          while IFS= read -r pkg || [ -n "$pkg" ]; do
+            [ -z "$pkg" ] && continue
+            VAR_NAME="THIS_RUN_${pkg//[^a-zA-Z0-9]/_}"
+            THIS_BOOST=${!VAR_NAME:-0}
+            
+            jq --arg pkg "$pkg" --argjson boost "$THIS_BOOST" --arg date "$DATE" '
+              .packages[$pkg] |= (if . == null then {totalBoosted: 0} else . end) |
+              .packages[$pkg].totalBoosted += $boost
+            ' pkg-stats.json > pkg-stats.json.tmp && mv pkg-stats.json.tmp pkg-stats.json
+          done < pkg-list.txt
+          
+          jq --argjson runs "$TOTAL_RUNS" --arg date "$DATE" '
+            .totalRuns = $runs |
+            .lastUpdated = $date
+          ' pkg-stats.json > pkg-stats.json.tmp && mv pkg-stats.json.tmp pkg-stats.json
+
+      - name: Generate download stats table
+        run: |
+          echo "| Package | Badge | Total Boosted | Est. Weekly |" > table.md
+          echo "|---------|-------|---------------|-------------|" >> table.md
+          
+          if [ "$PACKAGE_COUNT" -gt 0 ]; then
+            while IFS= read -r pkg || [ -n "$pkg" ]; do
+              TOTAL_PKG=$(jq -r --arg p "$pkg" '.packages[$p].totalBoosted // 0' pkg-stats.json 2>/dev/null || echo "0")
+              EST_WEEKLY=$(( TOTAL_RUNS > 0 ? (TOTAL_PKG * RUNS_PER_WEEK) / TOTAL_RUNS : 0 ))
+              
+              echo "| [$pkg](https://www.npmjs.com/package/$pkg) | <img alt=\"Downloads\" src=\"https://img.shields.io/npm/dw/$pkg\"> | $TOTAL_PKG | ~$EST_WEEKLY |" >> table.md
+            done < pkg-list.txt
+          else
+            echo "| *No packages found* | — | — | — |" >> table.md
+          fi
 
       - name: Save stats to JSON
         run: |
@@ -336,7 +345,7 @@ jobs:
             echo "- npm may apply rate limiting if you use very high repeats or very low frequency."
             echo "- Use responsibly and respect npm's Terms of Service."
             echo ""
-            echo "## 📊 Download Stats (Auto Updated)"
+            echo "## 📊 Download Stats"
             echo ""
             echo "**Last Updated:** $DATE"
             echo ""
