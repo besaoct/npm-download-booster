@@ -114,9 +114,9 @@ jobs:
             echo "- Installs each package **$REPEATS times** per run (configurable)"
             echo ""
             echo "### Proxy Usage"
-            echo "- **Strategy:** Direct connection (free proxies disabled - too unreliable)"
-            echo "- **Method:** Aggressive cache cleaning + 3 retries + --strict-ssl=false"
-            echo "- **Note:** More stable and consistent"
+            echo "- **Strategy:** Fresh proxy tested before each install → fallback to direct"
+            echo "- **Sources:** ProxyScrape, TheSpeedX, Proxifly + others"
+            echo "- **Note:** Proxies are unreliable — many will fail"
             echo ""
             echo "### Packages & Weekly Downloads"
             cat table.md
@@ -158,27 +158,62 @@ jobs:
           VERIFY_EOF
           
           TOTAL_INSTALLS=0
+          PROXY_ATTEMPTS=0
+          PROXY_SUCCESSES=0
+          
+          get_fresh_proxy() {
+            > /tmp/current_proxies.txt
+            curl -s "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=text&timeout=15000" >> /tmp/current_proxies.txt || true
+            curl -s "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt" >> /tmp/current_proxies.txt || true
+            curl -s "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt" >> /tmp/current_proxies.txt || true
+            curl -s "https://raw.githubusercontent.com/monosans/proxy-list/main/proxies/http.txt" >> /tmp/current_proxies.txt || true
+            
+            grep -E '^(http|https)://' /tmp/current_proxies.txt | sort -u | shuf > /tmp/shuffled.txt
+            
+            while IFS= read -r proxy || [ -n "$proxy" ]; do
+              [ -z "$proxy" ] && continue
+              if curl -s --max-time 8 --proxy "$proxy" "http://httpbin.org/ip" >/dev/null 2>&1; then
+                echo "$proxy"
+                return 0
+              fi
+            done < <(head -n 12 /tmp/shuffled.txt)
+            echo ""
+            return 1
+          }
           
           while IFS= read -r pkg || [ -n "$pkg" ]; do
             [ -z "$pkg" ] && continue
             echo "→ Processing $pkg"
             
             for i in $(seq 1 $REPEATS); do
-              # Aggressive cleanup - treat as completely new install
               npm cache clean --force 2>/dev/null || true
               rm -rf node_modules package-lock.json ~/.npm/_cacache ~/.npm/* 2>/dev/null || true
               
+              PROXY=$(get_fresh_proxy)
               SUCCESS=0
               
               for attempt in {1..3}; do
-                echo "  └─ Attempt $attempt (Direct)"
+                if [ -n "$PROXY" ]; then
+                  PROXY_ATTEMPTS=$((PROXY_ATTEMPTS + 1))
+                  export HTTP_PROXY=$PROXY
+                  export HTTPS_PROXY=$PROXY
+                  echo "  └─ Attempt $attempt | Proxy: $PROXY"
+                  EXTRA="--strict-ssl=false"
+                else
+                  unset HTTP_PROXY HTTPS_PROXY
+                  echo "  └─ Attempt $attempt | Direct connection"
+                  EXTRA=""
+                fi
                 
                 if npm install "$pkg@latest" \
                   --no-audit --no-fund --prefer-offline --no-cache --ignore-scripts \
-                  --strict-ssl=false --silent 2>install.log; then
+                  $EXTRA --silent 2>install.log; then
                   
                   if node /tmp/verify.js "$pkg" >/dev/null 2>&1; then
                     TOTAL_INSTALLS=$((TOTAL_INSTALLS + 1))
+                    if [ -n "$PROXY" ]; then
+                      PROXY_SUCCESSES=$((PROXY_SUCCESSES + 1))
+                    fi
                     echo "  └─ ✅ Success"
                     SUCCESS=1
                     break
@@ -198,18 +233,22 @@ jobs:
               npm cache clean --force 2>/dev/null || true
               rm -rf node_modules package-lock.json ~/.npm/_cacache 2>/dev/null || true
               
-              # Randomized delay (2–15 seconds)
               DELAY=$((RANDOM % 130 + 20))
               sleep 0.$DELAY
             done
           done < "$GITHUB_WORKSPACE/pkg-list.txt"
           
           echo "BOOST_THIS_RUN=$TOTAL_INSTALLS" >> $GITHUB_ENV
+          echo "PROXY_ATTEMPTS=$PROXY_ATTEMPTS" >> $GITHUB_ENV
+          echo "PROXY_SUCCESSES=$PROXY_SUCCESSES" >> $GITHUB_ENV
           echo "✓ Boost completed: $TOTAL_INSTALLS installs"
 
       - name: Set boost count for skipped runs
         if: env.SKIP_BOOST == 'true'
-        run: echo "BOOST_THIS_RUN=0" >> $GITHUB_ENV
+        run: |
+          echo "BOOST_THIS_RUN=0" >> $GITHUB_ENV
+          echo "PROXY_ATTEMPTS=0" >> $GITHUB_ENV
+          echo "PROXY_SUCCESSES=0" >> $GITHUB_ENV
 
       - name: Generate download stats table
         run: |
@@ -277,9 +316,13 @@ jobs:
             echo "- **Last Run:** $DATE"
             echo ""
             echo "### Proxy Usage (This Run)"
-            echo "- **Strategy:** Direct connection (free proxies disabled)"
-            echo "- **Method:** Aggressive cache cleaning + 3 retries + --strict-ssl=false"
-            echo "- **Note:** More reliable than free proxies"
+            echo "- **Strategy:** Fresh proxy per install + fallback to direct"
+            echo "- **Proxy Attempts:** $PROXY_ATTEMPTS"
+            echo "- **Proxy Successes:** $PROXY_SUCCESSES"
+            if [ "$PROXY_ATTEMPTS" -gt 0 ]; then
+              echo "- **Proxy Success Rate:** $((PROXY_SUCCESSES * 100 / PROXY_ATTEMPTS))%"
+            fi
+            echo "- **Sources:** ProxyScrape, TheSpeedX, Proxifly, Monosans"
             echo ""
             echo "### Packages & Weekly Downloads"
             cat table.md
