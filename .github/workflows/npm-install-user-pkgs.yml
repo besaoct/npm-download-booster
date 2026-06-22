@@ -113,19 +113,10 @@ jobs:
             echo "- Runs every **$FREQUENCY hours** (configurable)"
             echo "- Installs each package **$REPEATS times** per run (configurable)"
             echo ""
-            echo "### Cumulative Stats"
-            echo "- **Total Runs:** $TOTAL_RUNS"
-            echo "- **Total Boosted:** $TOTAL_BOOSTED downloads"
-            echo "- **Boosted This Run:** *Running...*"
-            echo "- **Average per Run:** $AVG_PER_RUN downloads"
-            echo "- **Total Packages:** $TOTAL_PACKAGES"
-            echo "- **Estimated Weekly Boost:** Calculating..."
-            echo "- **Last Run:** $DATE"
-            echo ""
-            echo "### Proxy Usage (This Run)"
-            echo "- **Sources:** ProxyScrape + TheSpeedX"
-            echo "- **Working Proxies:** Testing..."
-            echo "- **Strategy:** Health-checked + Rotated per install"
+            echo "### Proxy Usage"
+            echo "- Fresh proxy fetched & tested **before each install**"
+            echo "- Sources: ProxyScrape, TheSpeedX, Proxifly"
+            echo "- Falls back to direct connection if no proxy works"
             echo ""
             echo "### Packages & Weekly Downloads"
             cat table.md
@@ -166,61 +157,54 @@ jobs:
           try { require(process.argv[1]); process.exit(0); } catch(e) { process.exit(1); }
           VERIFY_EOF
           
-          # === Fetch proxies from multiple sources ===
-          echo "Fetching free proxies from multiple sources..."
-          > /tmp/proxies.txt
-          
-          # Source 1: ProxyScrape
-          curl -s "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=text&timeout=8000" >> /tmp/proxies.txt 2>/dev/null || true
-          
-          # Source 2: TheSpeedX Proxy List
-          curl -s "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt" >> /tmp/proxies.txt 2>/dev/null || true
-          
-          # Source 3: Additional ProxyScrape
-          curl -s "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=text&timeout=10000" >> /tmp/proxies.txt 2>/dev/null || true
-          
-          # Clean and unique
-          sort -u /tmp/proxies.txt | grep -E '^(http|https)://' > /tmp/clean_proxies.txt
-          
-          # === Proxy Health Checking ===
-          echo "Testing proxy health..."
-          > /tmp/working_proxies.txt
-          
-          while IFS= read -r proxy || [ -n "$proxy" ]; do
-            [ -z "$proxy" ] && continue
-            if curl -s --max-time 6 --proxy "$proxy" "https://httpbin.org/ip" >/dev/null 2>&1; then
-              echo "$proxy" >> /tmp/working_proxies.txt
-            fi
-          done < /tmp/clean_proxies.txt
-          
-          PROXIES=($(cat /tmp/working_proxies.txt))
-          WORKING_COUNT=${#PROXIES[@]}
-          echo "WORKING_PROXIES=$WORKING_COUNT" >> $GITHUB_ENV
-          echo "Loaded $WORKING_COUNT working proxies"
-          
           TOTAL_INSTALLS=0
+          
+          # Function: Get a fresh working proxy before each install
+          get_fresh_proxy() {
+            > /tmp/current_proxies.txt
+            
+            # Fetch from multiple sources
+            curl -s "https://api.proxyscrape.com/v4/free-proxy-list/get?request=display_proxies&proxy_format=protocolipport&format=text&timeout=12000" >> /tmp/current_proxies.txt || true
+            curl -s "https://raw.githubusercontent.com/TheSpeedX/PROXY-List/master/http.txt" >> /tmp/current_proxies.txt || true
+            curl -s "https://raw.githubusercontent.com/proxifly/free-proxy-list/main/proxies/protocols/http/data.txt" >> /tmp/current_proxies.txt || true
+            
+            # Filter HTTP/HTTPS only and shuffle
+            grep -E '^(http|https)://' /tmp/current_proxies.txt | sort -u | shuf > /tmp/shuffled_proxies.txt
+            
+            # Test up to 8 proxies
+            while IFS= read -r proxy || [ -n "$proxy" ]; do
+              [ -z "$proxy" ] && continue
+              if curl -s --max-time 8 --proxy "$proxy" "http://httpbin.org/ip" >/dev/null 2>&1; then
+                echo "$proxy"
+                return 0
+              fi
+            done < <(head -n 8 /tmp/shuffled_proxies.txt)
+            
+            echo ""  # Return empty if no working proxy
+            return 1
+          }
           
           while IFS= read -r pkg || [ -n "$pkg" ]; do
             [ -z "$pkg" ] && continue
             echo "→ Processing $pkg"
             
             for i in $(seq 1 $REPEATS); do
-              # Aggressive cleanup
+              # Aggressive cleanup - treat as new install
               npm cache clean --force 2>/dev/null || true
               rm -rf node_modules package-lock.json ~/.npm/_cacache ~/.npm/* 2>/dev/null || true
               
-              # Random working proxy
-              if [ ${#PROXIES[@]} -gt 0 ]; then
-                PROXY=${PROXIES[$((RANDOM % ${#PROXIES[@]}))]}
+              # Get fresh proxy for this specific install
+              PROXY=$(get_fresh_proxy)
+              if [ -n "$PROXY" ]; then
                 export HTTP_PROXY=$PROXY
                 export HTTPS_PROXY=$PROXY
-                echo "  └─ Using proxy → $PROXY"
+                echo "  └─ Fresh proxy → $PROXY"
               else
                 unset HTTP_PROXY HTTPS_PROXY
-                echo "  └─ No proxy"
+                echo "  └─ No working proxy (direct)"
               fi
               
-              # Install
+              # Install package
               npm install "$pkg@latest" \
                 --no-audit --no-fund --prefer-offline --no-cache --ignore-scripts \
                 --silent >/dev/null 2>&1 && \
@@ -234,7 +218,7 @@ jobs:
               npm cache clean --force 2>/dev/null || true
               rm -rf node_modules package-lock.json ~/.npm/_cacache 2>/dev/null || true
               
-              # Random delay 2.0 - 15.0 seconds
+              # Random delay (2.0 - 15.0 seconds)
               DELAY=$((RANDOM % 130 + 20))
               sleep 0.$DELAY
             done
@@ -245,9 +229,7 @@ jobs:
 
       - name: Set boost count for skipped runs
         if: env.SKIP_BOOST == 'true'
-        run: |
-          echo "BOOST_THIS_RUN=0" >> $GITHUB_ENV
-          echo "WORKING_PROXIES=0" >> $GITHUB_ENV
+        run: echo "BOOST_THIS_RUN=0" >> $GITHUB_ENV
 
       - name: Generate download stats table
         run: |
@@ -315,10 +297,9 @@ jobs:
             echo "- **Last Run:** $DATE"
             echo ""
             echo "### Proxy Usage (This Run)"
-            echo "- **Sources:** ProxyScrape, TheSpeedX/PROXY-List"
-            echo "- **Working Proxies Found:** $WORKING_PROXIES"
-            echo "- **Strategy:** Health-checked + Rotated with random delay"
-            echo "- **Purpose:** Use different IPs to simulate organic traffic"
+            echo "- **Strategy:** Fresh proxy fetched & health-checked **before every install**"
+            echo "- **Sources:** ProxyScrape, TheSpeedX, Proxifly"
+            echo "- **Purpose:** Use different IPs + avoid dead proxies"
             echo ""
             echo "### Packages & Weekly Downloads"
             cat table.md
