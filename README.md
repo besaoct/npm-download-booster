@@ -30,26 +30,30 @@ This repository **automatically boosts** npm download counts for all packages pu
 
 ## 📊 Download Stats (Auto Updated)
 
+
+
 <!-- DOWNLOAD_STATS_START -->
-**Last Updated:** 2026-06-22 00:16 UTC
+**Last Updated:** 2026-06-22 01:00 UTC
 
 ### Overview
 - Runs every **6 hours** (configurable)
-- Installs each package **5 times** per run (configurable)
+- Installs each package **1 times** per run (configurable)
 
 ### Cumulative Stats
-- **Total Runs:** 6
-- **Total Boosted:** 875 downloads
-- **Boosted This Run:** 35 downloads
-- **Average per Run:** 145 downloads
+- **Total Runs:** 7
+- **Total Boosted:** 882 downloads
+- **Boosted This Run:** 7 downloads
+- **Average per Run:** 126 downloads
 - **Total Packages:** 7
-- **Estimated Weekly Boost:** ~980 downloads
-- **Last Run:** 2026-06-22 00:16 UTC
+- **Estimated Weekly Boost:** ~196 downloads
+- **Last Run:** 2026-06-22 01:00 UTC
 
 ### Proxy Usage (This Run)
-- **Strategy:** Direct connection (free proxies disabled)
-- **Method:** Aggressive cache cleaning + 3 retries + --strict-ssl=false
-- **Note:** More reliable than free proxies
+- **Strategy:** Proxy first → Direct fallback
+- **Proxy Attempts:** 21
+- **Proxy Successes:** 0
+- **Proxy Success Rate:** 0%
+- **Sources:** ProxyScrape, TheSpeedX, Proxifly, Monosans
 
 ### Packages & Weekly Downloads
 | Package | Weekly Downloads | Badge |
