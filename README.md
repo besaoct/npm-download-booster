@@ -1,70 +1,36 @@
-# npm Download Booster
 
-This repository **automatically boosts** npm download counts for all packages published by a given npm user.
-
-> **Fork-friendly**: When you fork this repo, it will automatically use **your GitHub username** as the npm username (you can override it anytime via workflow dispatch).
-
-## How to Use
-
-1. **Fork** this repository
-2. Go to **Actions** → **npm-install-user-pkgs** → **Run workflow**
-3. Configure the inputs:
-   - **Repeats** — Number of installs per package (default: 1)
-   - **Username** — Your npm username (default: GitHub username)
-   - **Frequency (hours)** — How often it runs (default: 6)
-
-## Configuration Options
-
-| Option       | Description                            | Default | How to Change                  |
-|--------------|----------------------------------------|---------|--------------------------------|
-| Frequency    | Run every X hours                      | 6       | Workflow dispatch or cron      |
-| Repeats      | Installs per package per run           | 1       | Manual trigger                 |
-| Username     | npm username to boost                  | GitHub owner | Manual trigger             |
-
-## ⚠️ Important Notes
-
-- This tool uses real `npm install` commands — each install counts as a legitimate download on npm.
-- GitHub Actions has **free minute limits** (especially on public repositories).
-- npm may apply rate limiting if you use very high repeats or very low frequency.
-- Use responsibly and respect npm's [Terms of Service](https://www.npmjs.com/policies/terms).
-
-## 📊 Download Stats (Auto Updated)
-
-
-
-
-
-<!-- DOWNLOAD_STATS_START -->
-**Last Updated:** 2026-06-22 08:21 UTC
+**Last Updated:** 2026-06-22 08:35 UTC
 
 ### Overview
 - Runs every **6 hours** (configurable)
 - Installs each package **1 times** per run (configurable)
 
 ### Cumulative Stats
-- **Total Runs:** 8
-- **Total Boosted:** 889 downloads
+- **Total Runs:** 9
+- **Total Boosted:** 896 downloads
 - **Boosted This Run:** 7 downloads
-- **Average per Run:** 111 downloads
+- **Average per Run:** 99 downloads
 - **Total Packages:** 7
 - **Estimated Weekly Boost:** ~196 downloads
-- **Last Run:** 2026-06-22 08:21 UTC
+- **Last Run:** 2026-06-22 08:35 UTC
 
 ### Proxy Usage (This Run)
 - **Strategy:** Proxy first → Direct fallback
-- **Proxy Attempts:** 21
-- **Proxy Successes:** 0
-- **Proxy Success Rate:** 0%
+- **Proxy Attempts:** 17
+- **Proxy Successes:** 2
+- **Proxy Success Rate:** 11%
 - **Sources:** ProxyScrape, TheSpeedX, Proxifly, Monosans
 
-### Packages & Weekly Downloads
-| Package | Badge |
-|---------|-------|
-| [gramobase](https://www.npmjs.com/package/gramobase) | [![Downloads](https://img.shields.io/npm/dw/gramobase)](https://www.npmjs.com/package/gramobase) |
-| [drivespread](https://www.npmjs.com/package/drivespread) | [![Downloads](https://img.shields.io/npm/dw/drivespread)](https://www.npmjs.com/package/drivespread) |
-| [create-espkg](https://www.npmjs.com/package/create-espkg) | [![Downloads](https://img.shields.io/npm/dw/create-espkg)](https://www.npmjs.com/package/create-espkg) |
-| [justy](https://www.npmjs.com/package/justy) | [![Downloads](https://img.shields.io/npm/dw/justy)](https://www.npmjs.com/package/justy) |
-| [next-react-share](https://www.npmjs.com/package/next-react-share) | [![Downloads](https://img.shields.io/npm/dw/next-react-share)](https://www.npmjs.com/package/next-react-share) |
-| [genfunc](https://www.npmjs.com/package/genfunc) | [![Downloads](https://img.shields.io/npm/dw/genfunc)](https://www.npmjs.com/package/genfunc) |
-| [nuniq](https://www.npmjs.com/package/nuniq) | [![Downloads](https://img.shields.io/npm/dw/nuniq)](https://www.npmjs.com/package/nuniq) |
-<!-- DOWNLOAD_STATS_END -->
+### Packages & Stats
+| Package | Badge | Total Boosted | Est. Weekly |
+|---------|-------|---------------|-------------|
+| gramobase | <img alt="Downloads" src="https://img.shields.io/npm/dw/gramobase"> | 1 | ~3 |
+| drivespread | <img alt="Downloads" src="https://img.shields.io/npm/dw/drivespread"> | 1 | ~3 |
+| create-espkg | <img alt="Downloads" src="https://img.shields.io/npm/dw/create-espkg"> | 1 | ~3 |
+| justy | <img alt="Downloads" src="https://img.shields.io/npm/dw/justy"> | 1 | ~3 |
+| next-react-share | <img alt="Downloads" src="https://img.shields.io/npm/dw/next-react-share"> | 1 | ~3 |
+| genfunc | <img alt="Downloads" src="https://img.shields.io/npm/dw/genfunc"> | 1 | ~3 |
+| nuniq | <img alt="Downloads" src="https://img.shields.io/npm/dw/nuniq"> | 1 | ~3 |
+
+*Total Boosted = cumulative successful installs across all runs*
+*Est. Weekly = based on historical average*
