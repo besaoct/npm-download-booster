@@ -1,0 +1,27 @@
+{
+  "packages": {
+    "gramobase": {
+      "totalBoosted": 1
+    },
+    "drivespread": {
+      "totalBoosted": 1
+    },
+    "create-espkg": {
+      "totalBoosted": 1
+    },
+    "justy": {
+      "totalBoosted": 1
+    },
+    "next-react-share": {
+      "totalBoosted": 1
+    },
+    "genfunc": {
+      "totalBoosted": 1
+    },
+    "nuniq": {
+      "totalBoosted": 1
+    }
+  },
+  "totalRuns": 1,
+  "lastUpdated": "2026-06-22 15:32 UTC"
+}

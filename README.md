@@ -28,9 +28,9 @@ This repository automatically boosts npm download counts for all packages publis
 - npm may apply rate limiting if you use very high repeats or very low frequency.
 - Use responsibly and respect npm's Terms of Service.
 
-## 📊 Download Stats (Auto Updated)
+## 📊 Download Stats
 
-**Last Updated:** 2026-06-22 14:38 UTC
+**Last Updated:** 2026-06-22 15:32 UTC
 
 ### Overview
 - Runs every **6 hours** (configurable)
@@ -43,24 +43,24 @@ This repository automatically boosts npm download counts for all packages publis
 - **Average per Run:** 7 downloads
 - **Total Packages:** 7
 - **Estimated Weekly Boost:** ~196 downloads
-- **Last Run:** 2026-06-22 14:38 UTC
+- **Last Run:** 2026-06-22 15:32 UTC
 
 ### Proxy Usage (This Run)
 - **Strategy:** Proxy first → Direct fallback
-- **Proxy Attempts:** 21
-- **Proxy Successes:** 0
-- **Proxy Success Rate:** 0%
+- **Proxy Attempts:** 20
+- **Proxy Successes:** 1
+- **Proxy Success Rate:** 5%
 - **Sources:** ProxyScrape, TheSpeedX, Proxifly, Monosans
 
 ### Packages & Stats
 | Package | Badge | Total Boosted | Est. Weekly |
 |---------|-------|---------------|-------------|
-| [gramobase](https://www.npmjs.com/package/gramobase) | <img alt="Downloads" src="https://img.shields.io/npm/dw/gramobase"> | 1 | ~0 |
-| [drivespread](https://www.npmjs.com/package/drivespread) | <img alt="Downloads" src="https://img.shields.io/npm/dw/drivespread"> | 1 | ~0 |
-| [create-espkg](https://www.npmjs.com/package/create-espkg) | <img alt="Downloads" src="https://img.shields.io/npm/dw/create-espkg"> | 1 | ~0 |
-| [justy](https://www.npmjs.com/package/justy) | <img alt="Downloads" src="https://img.shields.io/npm/dw/justy"> | 1 | ~0 |
-| [next-react-share](https://www.npmjs.com/package/next-react-share) | <img alt="Downloads" src="https://img.shields.io/npm/dw/next-react-share"> | 1 | ~0 |
-| [genfunc](https://www.npmjs.com/package/genfunc) | <img alt="Downloads" src="https://img.shields.io/npm/dw/genfunc"> | 1 | ~0 |
-| [nuniq](https://www.npmjs.com/package/nuniq) | <img alt="Downloads" src="https://img.shields.io/npm/dw/nuniq"> | 1 | ~0 |
+| [gramobase](https://www.npmjs.com/package/gramobase) | <img alt="Downloads" src="https://img.shields.io/npm/dw/gramobase"> | 1 | ~28 |
+| [drivespread](https://www.npmjs.com/package/drivespread) | <img alt="Downloads" src="https://img.shields.io/npm/dw/drivespread"> | 1 | ~28 |
+| [create-espkg](https://www.npmjs.com/package/create-espkg) | <img alt="Downloads" src="https://img.shields.io/npm/dw/create-espkg"> | 1 | ~28 |
+| [justy](https://www.npmjs.com/package/justy) | <img alt="Downloads" src="https://img.shields.io/npm/dw/justy"> | 1 | ~28 |
+| [next-react-share](https://www.npmjs.com/package/next-react-share) | <img alt="Downloads" src="https://img.shields.io/npm/dw/next-react-share"> | 1 | ~28 |
+| [genfunc](https://www.npmjs.com/package/genfunc) | <img alt="Downloads" src="https://img.shields.io/npm/dw/genfunc"> | 1 | ~28 |
+| [nuniq](https://www.npmjs.com/package/nuniq) | <img alt="Downloads" src="https://img.shields.io/npm/dw/nuniq"> | 1 | ~28 |
 
 *Package names are linked to their npm page. Total Boosted = lifetime successful installs.*
