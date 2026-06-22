@@ -1,8 +1,8 @@
 {
-  "totalRuns": 0,
-  "totalBoosted": 0,
-  "avgPerRun": 0,
-  "estimatedWeeklyBoost": 0,
+  "totalRuns": 1,
+  "totalBoosted": 7,
+  "avgPerRun": 7,
+  "estimatedWeeklyBoost": 196,
   "totalPackages": 7,
-  "lastRun": "2026-06-22 09:07 UTC"
+  "lastRun": "2026-06-22 09:54 UTC"
 }
