@@ -85,9 +85,9 @@ jobs:
         run: |
           DATE=$(date -u +"%Y-%m-%d %H:%M UTC")
           printf '%s\n' \
-            '| Package | Weekly Downloads | Badge |' \
-            '|---------|------------------|-------|' \
-            '| **Running...** | ... | ... |' > table.md
+            '| Package | Badge |' \
+            '|---------|-------|' \
+            '| **Running...** | ... |' > table.md
           
           awk '/<!-- DOWNLOAD_STATS_START -->/,/<!-- DOWNLOAD_STATS_END -->/{next} {print}' README.md > README.md.tmp
           
@@ -244,15 +244,14 @@ jobs:
 
       - name: Generate download stats table
         run: |
-          echo "| Package | Weekly Downloads | Badge |" > table.md
-          echo "|---------|------------------|-------|" >> table.md
+          echo "| Package | Badge |" > table.md
+          echo "|---------|-------|" >> table.md
           if [ "$PACKAGE_COUNT" -gt 0 ]; then
             while IFS= read -r pkg || [ -n "$pkg" ]; do
-              DOWNLOADS=$(curl -s --max-time 8 "https://api.npmjs.org/downloads/point/last-week/$pkg" | jq -r '.downloads // 0')
-              echo "| [$pkg](https://www.npmjs.com/package/$pkg) | $DOWNLOADS | [![Downloads](https://img.shields.io/npm/dw/$pkg)](https://www.npmjs.com/package/$pkg) |" >> table.md
+              echo "| [$pkg](https://www.npmjs.com/package/$pkg) | [![Downloads](https://img.shields.io/npm/dw/$pkg)](https://www.npmjs.com/package/$pkg) |" >> table.md
             done < pkg-list.txt
           else
-            echo "| *No packages found* | — | — |" >> table.md
+            echo "| *No packages found* | — |" >> table.md
           fi
 
       - name: Calculate cumulative stats
