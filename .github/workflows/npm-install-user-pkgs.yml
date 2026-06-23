@@ -14,7 +14,7 @@ on:
   pull_request:
     branches: [ main, master ]
   schedule:
-    - cron: '0 */12 * * *'
+    - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
       repeats:
@@ -30,7 +30,7 @@ on:
       frequency_hours:
         description: 'Run every X hours (1-24)'
         required: false
-        default: '12'
+        default: '24'
         type: string
 
 permissions:
