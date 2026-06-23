@@ -14,13 +14,13 @@ on:
   pull_request:
     branches: [ main, master ]
   schedule:
-    - cron: '0 */6 * * *'
+    - cron: '0 */12 * * *'
   workflow_dispatch:
     inputs:
       repeats:
         description: 'Number of times to install each package per run'
         required: false
-        default: '1'
+        default: '0'
         type: string
       username:
         description: 'npm username'
@@ -30,7 +30,7 @@ on:
       frequency_hours:
         description: 'Run every X hours (1-24)'
         required: false
-        default: '6'
+        default: '12'
         type: string
 
 permissions:
