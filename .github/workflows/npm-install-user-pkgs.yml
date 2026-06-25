@@ -57,7 +57,7 @@ jobs:
           REPEATS="${{ inputs.repeats }}"
           REPEATS="${REPEATS:-1}"
           FREQUENCY="${{ inputs.frequency_hours }}"
-          FREQUENCY="${FREQUENCY:-6}"
+          FREQUENCY="${FREQUENCY:-24}"
           
           if ! [[ "$REPEATS" =~ ^[0-9]+$ ]] || [ "$REPEATS" -lt 1 ]; then
             echo "ERROR: Repeats must be a positive number"; exit 1
