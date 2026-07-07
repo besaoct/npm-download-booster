@@ -1,27 +1,27 @@
 {
   "packages": {
     "gramobase": {
-      "totalBoosted": 13
+      "totalBoosted": 14
     },
     "drivespread": {
-      "totalBoosted": 13
+      "totalBoosted": 14
     },
     "create-espkg": {
-      "totalBoosted": 13
+      "totalBoosted": 14
     },
     "justy": {
-      "totalBoosted": 13
+      "totalBoosted": 14
     },
     "next-react-share": {
-      "totalBoosted": 13
+      "totalBoosted": 14
     },
     "genfunc": {
-      "totalBoosted": 13
+      "totalBoosted": 14
     },
     "nuniq": {
-      "totalBoosted": 13
+      "totalBoosted": 14
     }
   },
-  "totalRuns": 13,
-  "lastUpdated": "2026-07-05 02:53 UTC"
+  "totalRuns": 14,
+  "lastUpdated": "2026-07-07 02:51 UTC"
 }
